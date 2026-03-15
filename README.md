@@ -20,22 +20,23 @@ User (Browser) --> FastAPI Server --> AI Agent (GPT-4o)
                                         |
                                         v
                                    MCP Manager
-                                   /    |    \
-                          Postgres   Fetch   Filesystem
-                          MCP Server MCP Server MCP Server
-                              |         |          |
-                          Patient DB  HHS.gov   Reports Dir
+                                  /   |    |    \
+                        Postgres  Fetch  Filesystem  Memory
+                        MCP       MCP    MCP         MCP (Mem0)
+                          |        |       |           |
+                      Patient DB HHS.gov Reports   Mem0 Cloud
 ```
 
 ### MCP Servers
 
-The agent connects to **three MCP servers** via stdio, each providing specialized tools:
+The agent connects to **four MCP servers** via stdio, each providing specialized tools:
 
 | Server | Package | Purpose |
 |--------|---------|---------|
 | **PostgreSQL** | `@modelcontextprotocol/server-postgres` | Query patient records from the database |
 | **Fetch** | `mcp-server-fetch` | Retrieve Federal Poverty Level guidelines from HHS.gov |
 | **Filesystem** | `@modelcontextprotocol/server-filesystem` | Save eligibility determination reports as markdown |
+| **Memory** | `mem0-mcp-server` | Persistent memory — recall and save patient determination history across sessions |
 
 The `MCPManager` connects to all servers on startup, merges their tools into a unified list, and routes tool calls to the correct server at runtime.
 
@@ -47,7 +48,7 @@ while True:
     response = openai.chat.completions.create(
         model="gpt-4o",
         messages=conversation,
-        tools=all_mcp_tools,  # Tools from all 3 MCP servers
+        tools=all_mcp_tools,  # Tools from all 4 MCP servers
     )
 
     if response.finish_reason == "tool_calls":
@@ -68,11 +69,13 @@ The copilot streams responses token-by-token to the browser using `ReadableStrea
 
 When given a patient, the agent autonomously:
 
-1. **Queries the database** for the patient's record (age, state, income, household size, etc.)
-2. **Fetches current FPL data** from HHS.gov (with hardcoded fallback data for reliability)
-3. **Applies state-specific rules** — expansion status, income thresholds for adults/children/pregnant women
-4. **Produces a determination** with step-by-step reasoning
-5. **Saves a report** to the filesystem as a timestamped markdown file
+1. **Checks memory** for any prior determinations on this patient (via Mem0)
+2. **Queries the database** for the patient's record (age, state, income, household size, etc.)
+3. **Fetches current FPL data** from HHS.gov (with hardcoded fallback data for reliability)
+4. **Applies state-specific rules** — expansion status, income thresholds for adults/children/pregnant women
+5. **Produces a determination** with step-by-step reasoning
+6. **Saves a report** to the filesystem as a timestamped markdown file
+7. **Saves to memory** a summary of the determination for future recall
 
 ## Tech Stack
 
@@ -80,6 +83,7 @@ When given a patient, the agent autonomously:
 - **MCP**: Model Context Protocol for tool integration (stdio transport)
 - **Backend**: FastAPI with streaming responses
 - **Database**: PostgreSQL (via MCP, not direct SQL in app code)
+- **Memory**: Mem0 (persistent semantic memory via MCP)
 - **Frontend**: Vanilla HTML/CSS/JS — single file, no build step
 - **Deployment**: Render (web service + managed Postgres)
 
@@ -117,7 +121,7 @@ docker run -d --name medicaid-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=me
 pip install -r requirements.txt
 
 # Configure environment
-cp .env.example .env  # Add your OPENAI_API_KEY
+cp .env.example .env  # Add your OPENAI_API_KEY and MEM0_API_KEY
 
 # Seed the database
 python seed_db.py
@@ -133,7 +137,7 @@ Open http://localhost:8000 to use the copilot.
 1. Push to GitHub
 2. Go to [Render Dashboard](https://dashboard.render.com/select-repo?type=blueprint)
 3. Connect the repo — Render detects `render.yaml`
-4. Set `OPENAI_API_KEY` when prompted
+4. Set `OPENAI_API_KEY` and `MEM0_API_KEY` when prompted
 5. Deploy
 
 The blueprint creates a free web service and a free PostgreSQL database, seeds patient data on first build.

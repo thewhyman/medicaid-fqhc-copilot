@@ -27,4 +27,12 @@ SERVER_CONFIGS = {
         command="npx",
         args=["-y", "--silent", "@modelcontextprotocol/server-filesystem", str(REPORTS_DIR)],
     ),
+    "memory": StdioServerParameters(
+        command="uvx",
+        args=["mem0-mcp-server"],
+        env={
+            "MEM0_API_KEY": os.environ.get("MEM0_API_KEY", ""),
+            "MEM0_DEFAULT_USER_ID": "medicaid-copilot",
+        },
+    ),
 }
