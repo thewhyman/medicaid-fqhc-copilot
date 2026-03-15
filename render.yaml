@@ -1,7 +1,7 @@
 databases:
   - name: medicaid-db
     plan: free
-    databaseName: medicaid
+    databaseName: medicaid1
 
 services:
   - type: web
@@ -18,4 +18,4 @@ services:
           name: medicaid-db
           property: connectionString
       - key: PYTHON_VERSION
-        value: "3.13"
+        value: "3.13.2"
