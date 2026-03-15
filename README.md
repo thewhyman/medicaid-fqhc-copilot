@@ -1,6 +1,6 @@
-# Medicaid FQHC Copilot
+# Medicaid Eligibility Copilot for FQHC Caseworkers
 
-An **agentic AI copilot** for Federally Qualified Health Center (FQHC) caseworkers that determines Medicaid eligibility using multiple MCP (Model Context Protocol) servers.
+An **agentic AI copilot** that helps Federally Qualified Health Center (FQHC) caseworkers determine Medicaid eligibility using multiple MCP (Model Context Protocol) servers.
 
 ## What Makes This Agentic
 

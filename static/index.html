@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FQHC Eligibility Copilot</title>
+<title>Medicaid Eligibility Copilot</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f5f7fa; color: #1a1a2e; }
@@ -30,6 +30,17 @@
   .patient-card .name { font-weight: 600; font-size: 14px; }
   .patient-card .details { font-size: 12px; color: #5f6368; margin-top: 4px; }
   .patient-card .details span { margin-right: 8px; }
+
+  /* Patient detail panel */
+  .patient-detail { border-top: 1px solid #e0e0e0; padding: 16px; font-size: 13px; overflow-y: auto; max-height: 45%; }
+  .patient-detail .detail-header { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #1a73e8; }
+  .patient-detail .detail-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+  .patient-detail .detail-row:last-child { border-bottom: none; }
+  .patient-detail .detail-label { color: #5f6368; }
+  .patient-detail .detail-value { font-weight: 500; text-align: right; }
+  .patient-detail .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .patient-detail .badge.yes { background: #e8f5e9; color: #2e7d32; }
+  .patient-detail .badge.no { background: #fce4ec; color: #c62828; }
 
   /* Center — chat */
   .center { flex: 1; display: flex; flex-direction: column; background: #fafbfc; }
@@ -91,7 +102,7 @@
 
 <div class="header">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-  <h1>FQHC Eligibility Copilot</h1>
+  <h1>Medicaid Eligibility Copilot</h1>
   <div class="status">
     <div class="dot" id="statusDot"></div>
     <span id="statusText">Connecting...</span>
@@ -106,6 +117,7 @@
       <button onclick="openAddPatient()">+ Add</button>
     </div>
     <div class="patient-list" id="patientList"></div>
+    <div class="patient-detail" id="patientDetail" style="display:none;"></div>
   </div>
 
   <!-- Center: Chat -->
@@ -115,7 +127,7 @@
       <button class="check-btn" id="checkBtn" onclick="checkEligibility()" disabled>Check Eligibility</button>
     </div>
     <div class="chat-messages" id="chatMessages">
-      <div class="empty">Select a patient from the left panel to begin an eligibility check.</div>
+      <div class="empty">Select a patient to view their details and check Medicaid eligibility.</div>
     </div>
     <div class="chat-input">
       <input type="text" id="chatInput" placeholder="Ask a follow-up question..." onkeydown="if(event.key==='Enter')sendMessage()" disabled>
@@ -261,6 +273,28 @@ function selectPatient(p) {
   document.getElementById('sendBtn').disabled = false;
   document.getElementById('chatMessages').innerHTML = '';
   loadPatients(); // refresh selection highlight
+  showPatientDetail(p);
+}
+
+function showPatientDetail(p) {
+  const panel = document.getElementById('patientDetail');
+  panel.style.display = 'block';
+  const badge = (val, yesLabel, noLabel) =>
+    `<span class="badge ${val ? 'yes' : 'no'}">${val ? (yesLabel || 'Yes') : (noLabel || 'No')}</span>`;
+  panel.innerHTML = `
+    <div class="detail-header">${p.first_name} ${p.last_name}</div>
+    <div class="detail-row"><span class="detail-label">Date of Birth</span><span class="detail-value">${p.date_of_birth || 'N/A'}</span></div>
+    <div class="detail-row"><span class="detail-label">Age</span><span class="detail-value">${p.age}</span></div>
+    <div class="detail-row"><span class="detail-label">State</span><span class="detail-value">${p.state}${p.county ? ', ' + p.county : ''}</span></div>
+    <div class="detail-row"><span class="detail-label">Household Size</span><span class="detail-value">${p.household_size}</span></div>
+    <div class="detail-row"><span class="detail-label">Annual Income</span><span class="detail-value">$${Number(p.annual_income).toLocaleString()}</span></div>
+    <div class="detail-row"><span class="detail-label">Income Source</span><span class="detail-value">${p.income_source || 'N/A'}</span></div>
+    <div class="detail-row"><span class="detail-label">Pregnant</span><span class="detail-value">${badge(p.is_pregnant)}</span></div>
+    <div class="detail-row"><span class="detail-label">Disability</span><span class="detail-value">${badge(p.has_disability)}</span></div>
+    <div class="detail-row"><span class="detail-label">US Citizen</span><span class="detail-value">${badge(p.is_us_citizen)}</span></div>
+    <div class="detail-row"><span class="detail-label">Immigration Status</span><span class="detail-value">${p.immigration_status || 'N/A'}</span></div>
+    <div class="detail-row"><span class="detail-label">Current Insurance</span><span class="detail-value">${p.current_insurance || 'None'}</span></div>
+  `;
 }
 
 // --- Chat ---
