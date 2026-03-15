@@ -17,15 +17,28 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/medic
 
 
 def _find_npm_package(package_name: str) -> str | None:
-    """Find the entry point of a globally-installed npm package.
+    """Find the entry point of a locally-installed npm MCP server package.
+
+    These packages only expose a ``bin`` entry (no ``main``), so plain
+    ``require.resolve()`` fails.  Instead we locate the package directory
+    via ``require.resolve('<pkg>/package.json')`` then read its ``bin``
+    field to build the real path.
 
     Returns the resolved path to the JS entry point, or None if not found.
     This avoids npx, which pollutes stdout with install messages that
     corrupt the MCP JSON-RPC stream.
     """
+    script = (
+        "const path = require('path');"
+        f"const pkgPath = require.resolve('{package_name}/package.json');"
+        "const pkg = require(pkgPath);"
+        "const dir = path.dirname(pkgPath);"
+        "const bin = typeof pkg.bin === 'string' ? pkg.bin : Object.values(pkg.bin)[0];"
+        "console.log(path.resolve(dir, bin));"
+    )
     try:
         result = subprocess.run(
-            ["node", "-e", f"console.log(require.resolve('{package_name}'))"],
+            ["node", "-e", script],
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode == 0 and result.stdout.strip():
