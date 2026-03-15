@@ -1,11 +1,14 @@
+import json
+import logging
 import os
-import subprocess
 from pathlib import Path
 
 from dotenv import load_dotenv
 from mcp import StdioServerParameters
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent
 REPORTS_DIR = BASE_DIR / "reports"
@@ -17,38 +20,31 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/medic
 
 
 def _find_npm_package(package_name: str) -> str | None:
-    """Find the entry point of a locally-installed npm MCP server package.
+    """Find the JS entry point of a locally-installed npm MCP server package.
 
-    These packages only expose a ``bin`` entry (no ``main``), so plain
-    ``require.resolve()`` fails.  Instead we locate the package directory
-    via ``require.resolve('<pkg>/package.json')`` then read its ``bin``
-    field to build the real path.
-
-    Returns the resolved path to the JS entry point, or None if not found.
-    This avoids npx, which pollutes stdout with install messages that
-    corrupt the MCP JSON-RPC stream.
+    Looks up node_modules/<package>/package.json, reads its ``bin`` field,
+    and returns the absolute path to the entry script.  This avoids npx,
+    which pollutes stdout with install/audit messages that corrupt the
+    MCP JSON-RPC stream.
     """
-    script = (
-        "const path = require('path');"
-        f"const pkgPath = require.resolve('{package_name}/package.json');"
-        "const pkg = require(pkgPath);"
-        "const dir = path.dirname(pkgPath);"
-        "const bin = typeof pkg.bin === 'string' ? pkg.bin : Object.values(pkg.bin)[0];"
-        "console.log(path.resolve(dir, bin));"
-    )
+    pkg_json = BASE_DIR / "node_modules" / package_name / "package.json"
+    if not pkg_json.exists():
+        logger.warning("npm package not found at %s", pkg_json)
+        return None
     try:
-        result = subprocess.run(
-            ["node", "-e", script],
-            capture_output=True, text=True, timeout=5,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
-    except Exception:
-        pass
+        meta = json.loads(pkg_json.read_text())
+        bin_field = meta.get("bin", {})
+        entry = bin_field if isinstance(bin_field, str) else next(iter(bin_field.values()), None)
+        if entry:
+            resolved = str((pkg_json.parent / entry).resolve())
+            logger.info("Resolved %s -> %s", package_name, resolved)
+            return resolved
+    except Exception as exc:
+        logger.warning("Failed to resolve %s: %s", package_name, exc)
     return None
 
 
-# Try to resolve globally-installed MCP server entry points to bypass npx
+# Resolve locally-installed MCP server entry points to bypass npx
 _pg_entry = _find_npm_package("@modelcontextprotocol/server-postgres")
 _fs_entry = _find_npm_package("@modelcontextprotocol/server-filesystem")
 
