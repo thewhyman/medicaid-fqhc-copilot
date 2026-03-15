@@ -17,7 +17,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/medic
 SERVER_CONFIGS = {
     "postgres": StdioServerParameters(
         command="npx",
-        args=["-y", "@modelcontextprotocol/server-postgres", DATABASE_URL],
+        args=["-y", "--silent", "@modelcontextprotocol/server-postgres", DATABASE_URL],
     ),
     "fetch": StdioServerParameters(
         command="python",
@@ -25,6 +25,6 @@ SERVER_CONFIGS = {
     ),
     "filesystem": StdioServerParameters(
         command="npx",
-        args=["-y", "@modelcontextprotocol/server-filesystem", str(REPORTS_DIR)],
+        args=["-y", "--silent", "@modelcontextprotocol/server-filesystem", str(REPORTS_DIR)],
     ),
 }
