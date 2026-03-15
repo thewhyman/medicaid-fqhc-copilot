@@ -129,8 +129,12 @@ def compute_expected(patient: dict) -> dict:
     threshold_amount = fpl * threshold_pct / 100
     eligible = income <= threshold_amount
 
+    # Disabled/elderly in non-expansion states may qualify through SSI — mark ambiguous
+    ambiguous = category in ("disabled", "elderly") and not thresholds["expansion"]
+
     return {
         "eligible": eligible,
+        "ambiguous": ambiguous,
         "category": category,
         "fpl": fpl,
         "income_pct": round(income_pct, 1),
@@ -181,6 +185,7 @@ def run_deterministic_evals():
             "patient_id": pid,
             "name": name,
             "expected_eligible": expected["eligible"],
+            "ambiguous": expected["ambiguous"],
             "category": expected["category"],
             "income_pct_fpl": expected["income_pct"],
             "threshold_pct": expected["threshold_pct"],
@@ -202,24 +207,90 @@ def run_deterministic_evals():
 
 
 # ---------------------------------------------------------------------------
+# Response quality: required keywords per patient
+# ---------------------------------------------------------------------------
+# Each keyword list uses alternatives (any match counts).
+# Format: list of (keyword_group, [alt1, alt2, ...]) — at least one alt must appear.
+REQUIRED_KEYWORDS = {
+    1: {"keyword_groups": [["pregnant", "pregnancy"], ["213", "213%"]], "state_alts": ["CA", "california"]},
+    2: {"keyword_groups": [["non-expansion", "not expanded", "has not expanded"], ["14%", "14 %", "14 percent"]], "state_alts": ["TX", "texas"]},
+    3: {"keyword_groups": [["child", "children", "minor", "under 19"]], "state_alts": ["FL", "florida"]},
+    4: {"keyword_groups": [["elderly", "aged", "senior", "65", "over 64"]], "state_alts": ["NY", "new york"]},
+    5: {"keyword_groups": [["adult"], ["138%", "138 %", "138 percent"]], "state_alts": ["OH", "ohio"]},
+    6: {"keyword_groups": [["disab", "disability", "disabled", "ssi"]], "state_alts": ["GA", "georgia"]},
+    7: {"keyword_groups": [["adult"], ["138%", "138 %", "138 percent"]], "state_alts": ["WA", "washington"]},
+    8: {"keyword_groups": [["non-expansion", "not expanded", "has not expanded"], ["18%", "18 %", "18 percent"]], "state_alts": ["AL", "alabama"]},
+}
+
+MAX_API_CALLS = 3
+BANNED_TOOLS = ["fetch"]
+
+
+def check_response_quality(pid: int, response: str) -> list[str]:
+    """Check agent response contains required keywords. Returns list of issues."""
+    issues = []
+    reqs = REQUIRED_KEYWORDS.get(pid)
+    if not reqs:
+        return issues
+    text_lower = response.lower()
+
+    # Check keyword groups — at least one alternative in each group must appear
+    for group in reqs["keyword_groups"]:
+        if not any(alt.lower() in text_lower for alt in group):
+            issues.append(f"missing one of {group}")
+
+    # Check state — accept any alternative
+    if not any(alt.lower() in text_lower for alt in reqs["state_alts"]):
+        issues.append(f"missing state {reqs['state_alts']}")
+    return issues
+
+
+def check_tool_efficiency(metrics: dict) -> list[str]:
+    """Check API call count and banned tools. Returns list of issues."""
+    issues = []
+    api_calls = metrics.get("api_calls", 0)
+    tool_names = metrics.get("tool_names", [])
+
+    if api_calls > MAX_API_CALLS:
+        issues.append(f"too many API calls: {api_calls} (max {MAX_API_CALLS})")
+
+    for banned in BANNED_TOOLS:
+        if banned in tool_names:
+            issues.append(f"used banned tool '{banned}'")
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
 # Agent eval (requires running server with DB)
 # ---------------------------------------------------------------------------
 async def run_agent_evals(base_url: str = "http://localhost:8000"):
-    """Run agent evals against a live server. Requires OpenAI API calls."""
+    """Run agent evals against a live server. Requires OpenAI API calls.
+
+    Checks three things per patient:
+      1. Correctness: ELIGIBLE/NOT ELIGIBLE matches expected
+      2. Efficiency: ≤3 API calls, no fetch tool used
+      3. Quality: response contains required keywords (category, state, threshold)
+    """
     import httpx
 
     deterministic = run_deterministic_evals()
 
-    print("\n=== Agent Eligibility Evals ===\n")
-    passed = 0
-    failed = 0
-    errors = []
+    print("\n=== Agent Evals (correctness + efficiency + quality) ===\n")
+    correctness_pass = 0
+    correctness_fail = 0
+    efficiency_pass = 0
+    efficiency_fail = 0
+    quality_pass = 0
+    quality_fail = 0
+    all_issues = []
 
     async with httpx.AsyncClient(timeout=120) as client:
         for expected in deterministic:
             pid = expected["patient_id"]
             name = expected["name"]
             session_id = f"eval-{pid}-{int(time.time())}"
+            patient_issues = []
 
             try:
                 resp = await client.post(
@@ -232,32 +303,78 @@ async def run_agent_evals(base_url: str = "http://localhost:8000"):
                 resp.raise_for_status()
                 data = resp.json()
                 agent_text = data.get("determination", "")
-                agent_eligible = parse_determination(agent_text)
+                metrics = data.get("metrics", {})
 
-                if agent_eligible == expected["expected_eligible"]:
-                    print(f"  ✓ #{pid} {name}: agent={agent_eligible}, expected={expected['expected_eligible']}")
-                    passed += 1
+                # --- Eval 1: Correctness ---
+                agent_eligible = parse_determination(agent_text)
+                if expected.get("ambiguous"):
+                    # Ambiguous cases (e.g. disabled in non-expansion state) — accept either answer
+                    correctness_pass += 1
+                    c_icon = "~"
+                elif agent_eligible == expected["expected_eligible"]:
+                    correctness_pass += 1
+                    c_icon = "✓"
                 elif agent_eligible is None:
-                    print(f"  ? #{pid} {name}: could not parse agent response")
-                    errors.append({"patient_id": pid, "error": "unparseable", "response": agent_text[:200]})
-                    failed += 1
+                    correctness_fail += 1
+                    c_icon = "?"
+                    patient_issues.append("could not parse determination")
                 else:
-                    print(f"  ✗ #{pid} {name}: agent={agent_eligible}, expected={expected['expected_eligible']}")
-                    errors.append({"patient_id": pid, "error": "wrong_determination", "agent": agent_eligible, "expected": expected["expected_eligible"]})
-                    failed += 1
+                    correctness_fail += 1
+                    c_icon = "✗"
+                    patient_issues.append(f"wrong: agent={agent_eligible}, expected={expected['expected_eligible']}")
+
+                # --- Eval 2: Efficiency ---
+                eff_issues = check_tool_efficiency(metrics)
+                if eff_issues:
+                    efficiency_fail += 1
+                    e_icon = "✗"
+                    patient_issues.extend(eff_issues)
+                else:
+                    efficiency_pass += 1
+                    e_icon = "✓"
+
+                # --- Eval 3: Response Quality ---
+                qual_issues = check_response_quality(pid, agent_text)
+                if qual_issues:
+                    quality_fail += 1
+                    q_icon = "✗"
+                    patient_issues.extend(qual_issues)
+                else:
+                    quality_pass += 1
+                    q_icon = "✓"
+
+                api_calls = metrics.get("api_calls", "?")
+                tools = ", ".join(metrics.get("tool_names", []))
+                print(f"  [{c_icon}{e_icon}{q_icon}] #{pid} {name} | calls={api_calls} tools=[{tools}]")
+                if patient_issues:
+                    for issue in patient_issues:
+                        print(f"       ↳ {issue}")
 
             except Exception as e:
-                print(f"  ✗ #{pid} {name}: ERROR {e}")
-                errors.append({"patient_id": pid, "error": str(e)})
-                failed += 1
+                print(f"  [✗✗✗] #{pid} {name}: ERROR {e}")
+                correctness_fail += 1
+                efficiency_fail += 1
+                quality_fail += 1
+                patient_issues.append(str(e))
 
-    print(f"\n  Results: {passed} passed, {failed} failed out of {len(deterministic)}")
-    if errors:
-        print(f"\n  Failures:")
-        for err in errors:
-            print(f"    #{err['patient_id']}: {err['error']}")
+            if patient_issues:
+                all_issues.append({"patient_id": pid, "name": name, "issues": patient_issues})
 
-    return passed, failed, errors
+    total = len(deterministic)
+    print(f"\n  === Summary ===")
+    print(f"  Correctness: {correctness_pass}/{total} passed")
+    print(f"  Efficiency:  {efficiency_pass}/{total} passed (max {MAX_API_CALLS} calls, no {BANNED_TOOLS})")
+    print(f"  Quality:     {quality_pass}/{total} passed (required keywords present)")
+
+    total_fail = correctness_fail + efficiency_fail + quality_fail
+    if all_issues:
+        print(f"\n  Issues:")
+        for item in all_issues:
+            print(f"    #{item['patient_id']} {item['name']}:")
+            for issue in item["issues"]:
+                print(f"      - {issue}")
+
+    return correctness_pass, total_fail, all_issues
 
 
 if __name__ == "__main__":

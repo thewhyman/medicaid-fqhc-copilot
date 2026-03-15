@@ -1,0 +1,12 @@
+{
+  "scripts": {
+    "eval": "python evals/test_eligibility.py",
+    "eval:agent": "python evals/test_eligibility.py --agent",
+    "start": "uvicorn server:app --reload",
+    "build": "pip install -r requirements.txt && npm run eval && python seed_db.py"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server-filesystem": "^2026.1.14",
+    "@modelcontextprotocol/server-postgres": "^0.6.2"
+  }
+}

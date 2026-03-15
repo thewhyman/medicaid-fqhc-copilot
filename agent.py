@@ -49,6 +49,7 @@ class MedicaidAgent:
         self.mcp = MCPManager()
         self.conversations: dict[str, list] = {}  # session_id -> messages
         self._db_url = None  # set during setup for persistence
+        self.last_query_metrics: dict = {}  # api_calls, tool_names for evals
 
     def _get_db(self):
         import psycopg2
@@ -195,6 +196,7 @@ class MedicaidAgent:
         openai_tools = _convert_tools(self.mcp.tools)
 
         api_calls = 1
+        tool_names_used = []
         response = self.client.chat.completions.create(
             model=MODEL,
             max_tokens=4096,
@@ -213,6 +215,7 @@ class MedicaidAgent:
             for tool_call in assistant_msg.tool_calls:
                 func_name = tool_call.function.name
                 func_args = json.loads(tool_call.function.arguments)
+                tool_names_used.append(func_name)
                 logger.info("Tool call: %s(%s)", func_name, _truncate(str(func_args)))
 
                 try:
@@ -243,6 +246,11 @@ class MedicaidAgent:
         # Extract final text response
         final_text = choice.message.content or ""
         messages.append({"role": "assistant", "content": final_text})
+        self.last_query_metrics = {
+            "api_calls": api_calls,
+            "tool_names": tool_names_used,
+            "session_id": session_id,
+        }
         logger.info("Query completed: %d OpenAI API calls for session %s", api_calls, session_id)
 
         # Save determination to Mem0 (SDK call, no GPT round-trip)

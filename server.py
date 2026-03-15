@@ -153,15 +153,17 @@ async def get_patient(patient_id: int):
         conn.close()
 
 
-@app.post("/check", response_model=CheckResponse)
+@app.post("/check")
 async def check_eligibility(request: CheckRequest):
     """Run an eligibility check through the AI agent."""
     determination = await agent.process_query(
         request.query, session_id=request.session_id
     )
-    return CheckResponse(
-        determination=determination, session_id=request.session_id
-    )
+    return {
+        "determination": determination,
+        "session_id": request.session_id,
+        "metrics": agent.last_query_metrics,
+    }
 
 
 @app.post("/check/stream")
