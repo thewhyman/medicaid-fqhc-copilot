@@ -61,12 +61,4 @@ SERVER_CONFIGS = {
         command="node" if _fs_entry else "npx",
         args=[_fs_entry, str(REPORTS_DIR)] if _fs_entry else ["-y", "@modelcontextprotocol/server-filesystem", str(REPORTS_DIR)],
     ),
-    "memory": StdioServerParameters(
-        command="uvx",
-        args=["mem0-mcp-server"],
-        env={
-            "MEM0_API_KEY": os.environ.get("MEM0_API_KEY", ""),
-            "MEM0_DEFAULT_USER_ID": "medicaid-copilot",
-        },
-    ),
 }

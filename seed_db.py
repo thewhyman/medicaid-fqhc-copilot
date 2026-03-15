@@ -31,6 +31,14 @@ def create_tables(conn):
                 current_insurance TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS conversations (
+                session_id TEXT PRIMARY KEY,
+                patient_id INTEGER,
+                messages JSONB NOT NULL DEFAULT '[]',
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                FOREIGN KEY (patient_id) REFERENCES patients(id)
+            );
+
             CREATE TABLE IF NOT EXISTS eligibility_history (
                 id SERIAL PRIMARY KEY,
                 patient_id INTEGER NOT NULL,
@@ -81,6 +89,7 @@ def main():
     try:
         # Drop existing tables to start fresh
         with conn.cursor() as cur:
+            cur.execute("DROP TABLE IF EXISTS conversations")
             cur.execute("DROP TABLE IF EXISTS eligibility_history")
             cur.execute("DROP TABLE IF EXISTS patients")
         conn.commit()

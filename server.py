@@ -34,7 +34,7 @@ def get_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start MCP connections on startup, clean up on shutdown."""
-    await agent.setup()
+    await agent.setup(db_url=DATABASE_URL)
     yield
     await agent.cleanup()
 
@@ -195,17 +195,29 @@ async def check_patient_by_id(patient_id: int, session_id: str = "default"):
     return CheckResponse(determination=determination, session_id=session_id)
 
 
+@app.get("/patients/{patient_id}/sessions")
+async def get_patient_sessions(patient_id: int):
+    """List saved conversation sessions for a patient."""
+    return {"sessions": agent.list_patient_sessions(patient_id)}
+
+
 @app.get("/sessions/{session_id}")
 async def get_session(session_id: str):
-    """Retrieve conversation history for a session."""
+    """Retrieve conversation history for a session (in-memory or Postgres)."""
+    # Try in-memory first
     messages = agent.conversations.get(session_id)
+
+    # Fall back to Postgres
+    if messages is None:
+        messages = agent.load_conversation(session_id)
+
     if messages is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
     history = []
     for msg in messages:
-        role = msg["role"]
-        content = msg["content"]
+        role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
+        content = msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", None)
         if isinstance(content, str):
             history.append({"role": role, "content": content})
         elif isinstance(content, list):

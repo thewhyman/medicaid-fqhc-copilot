@@ -189,7 +189,9 @@
 let selectedPatient = null;
 let sessionId = null;
 let isStreaming = false;
-const chatHistory = {};  // patientId -> { html, sessionId }
+// Persist chat history across same-tab page navigations via sessionStorage
+const chatHistory = JSON.parse(sessionStorage.getItem('chatHistory') || '{}');
+function saveChatHistory() { sessionStorage.setItem('chatHistory', JSON.stringify(chatHistory)); }
 
 // --- Markdown renderer ---
 function stripLatex(raw) {
@@ -287,12 +289,13 @@ async function loadPatients() {
   });
 }
 
-function selectPatient(p) {
+async function selectPatient(p) {
   const chatArea = document.getElementById('chatMessages');
 
   // Save current patient's chat history before switching
   if (selectedPatient && chatArea.innerHTML) {
     chatHistory[selectedPatient.id] = { html: chatArea.innerHTML, sessionId };
+    saveChatHistory();
   }
 
   selectedPatient = p;
@@ -301,13 +304,40 @@ function selectPatient(p) {
   document.getElementById('chatInput').disabled = false;
   document.getElementById('sendBtn').disabled = false;
 
-  // Restore chat history for this patient, or show empty state
+  // 1. Check in-memory/sessionStorage cache first
   if (chatHistory[p.id]) {
     chatArea.innerHTML = chatHistory[p.id].html;
     sessionId = chatHistory[p.id].sessionId;
   } else {
-    sessionId = 'patient-' + p.id + '-' + Date.now();
-    chatArea.innerHTML = '<div class="empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Click <strong>Check Eligibility</strong> to start<br>or ask a question below.</div>';
+    // 2. Try to restore from server (Postgres)
+    let restored = false;
+    try {
+      const r = await fetch(`/patients/${p.id}/sessions`);
+      const data = await r.json();
+      if (data.sessions && data.sessions.length > 0) {
+        const latest = data.sessions[0]; // most recent
+        sessionId = latest.session_id;
+        const sr = await fetch(`/sessions/${sessionId}`);
+        const sdata = await sr.json();
+        if (sdata.messages && sdata.messages.length > 0) {
+          chatArea.innerHTML = '';
+          sdata.messages.forEach(msg => {
+            if (msg.role === 'user' || msg.role === 'assistant') {
+              addMessage(msg.role === 'assistant' ? 'agent' : 'user', msg.content || '');
+            }
+          });
+          chatHistory[p.id] = { html: chatArea.innerHTML, sessionId };
+          saveChatHistory();
+          restored = true;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load saved session:', e);
+    }
+    if (!restored) {
+      sessionId = 'patient-' + p.id + '-' + Date.now();
+      chatArea.innerHTML = '<div class="empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Click <strong>Check Eligibility</strong> to start<br>or ask a question below.</div>';
+    }
   }
 
   loadPatients(); // refresh selection highlight
@@ -410,6 +440,7 @@ async function streamRaw(query) {
       html: document.getElementById('chatMessages').innerHTML,
       sessionId,
     };
+    saveChatHistory();
   }
 
   loadReports(); // refresh in case a new report was saved

@@ -19,7 +19,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gpt-4o"
+MODEL = "gpt-4o-mini"
 
 
 def _convert_tools(mcp_tools: list[dict]) -> list[dict]:
@@ -42,13 +42,121 @@ class MedicaidAgent:
         self.client = OpenAI()
         self.mcp = MCPManager()
         self.conversations: dict[str, list] = {}  # session_id -> messages
+        self._db_url = None  # set during setup for persistence
 
-    async def setup(self):
-        """Connect to all MCP servers."""
+    def _get_db(self):
+        import psycopg2
+        conn = psycopg2.connect(self._db_url)
+        conn.autocommit = False
+        return conn
+
+    def _ensure_table(self):
+        """Create conversations table if it doesn't exist."""
+        conn = self._get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS conversations (
+                        session_id TEXT PRIMARY KEY,
+                        patient_id INTEGER,
+                        messages JSONB NOT NULL DEFAULT '[]',
+                        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+                    )
+                """)
+            conn.commit()
+        finally:
+            conn.close()
+
+    def save_conversation(self, session_id: str, patient_id: int | None = None):
+        """Persist a conversation to Postgres."""
+        if not self._db_url:
+            return
+        messages = self.conversations.get(session_id, [])
+        # Filter to only serializable message types (user, assistant text)
+        serializable = []
+        for msg in messages:
+            role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
+            content = msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", None)
+            if role in ("user", "assistant") and isinstance(content, str):
+                serializable.append({"role": role, "content": content})
+        conn = self._get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO conversations (session_id, patient_id, messages, updated_at)
+                    VALUES (%s, %s, %s::jsonb, NOW())
+                    ON CONFLICT (session_id) DO UPDATE
+                    SET messages = EXCLUDED.messages, updated_at = NOW()
+                """, (session_id, patient_id, json.dumps(serializable)))
+            conn.commit()
+        except Exception as e:
+            logger.warning("Failed to save conversation %s: %s", session_id, e)
+            conn.rollback()
+        finally:
+            conn.close()
+
+    def load_conversation(self, session_id: str) -> list | None:
+        """Load a conversation from Postgres. Returns None if not found."""
+        if not self._db_url:
+            return None
+        conn = self._get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT messages FROM conversations WHERE session_id = %s",
+                    (session_id,),
+                )
+                row = cur.fetchone()
+            if row and row[0]:
+                return row[0] if isinstance(row[0], list) else json.loads(row[0])
+        except Exception as e:
+            logger.warning("Failed to load conversation %s: %s", session_id, e)
+        finally:
+            conn.close()
+        return None
+
+    def list_patient_sessions(self, patient_id: int) -> list[dict]:
+        """List saved sessions for a patient."""
+        if not self._db_url:
+            return []
+        conn = self._get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT session_id, updated_at FROM conversations WHERE patient_id = %s ORDER BY updated_at DESC",
+                    (patient_id,),
+                )
+                return [{"session_id": r[0], "updated_at": str(r[1])} for r in cur.fetchall()]
+        except Exception as e:
+            logger.warning("Failed to list sessions for patient %s: %s", patient_id, e)
+        finally:
+            conn.close()
+        return []
+
+    async def setup(self, db_url: str | None = None):
+        """Connect to all MCP servers and set up conversation persistence."""
+        if db_url:
+            self._db_url = db_url
+            self._ensure_table()
+            logger.info("Conversation persistence enabled (Postgres)")
         logger.info("Connecting to MCP servers...")
         await self.mcp.connect_all()
         tool_names = [t["name"] for t in self.mcp.tools]
         logger.info("Ready. Available tools: %s", tool_names)
+
+    def _extract_patient_id(self, session_id: str) -> int | None:
+        """Extract patient ID from session_id like 'patient-5-1234567890'."""
+        if session_id.startswith("patient-"):
+            parts = session_id.split("-")
+            if len(parts) >= 2 and parts[1].isdigit():
+                return int(parts[1])
+        return None
+
+    def _init_session(self, session_id: str):
+        """Load session from DB if not already in memory."""
+        if session_id not in self.conversations:
+            saved = self.load_conversation(session_id)
+            self.conversations[session_id] = saved if saved else []
 
     async def process_query(self, query: str, session_id: str = "default") -> str:
         """Process a user query through the agentic loop.
@@ -56,14 +164,14 @@ class MedicaidAgent:
         Sends the query to GPT-4o with all MCP tools available.
         Loops until the model stops requesting tool calls.
         """
-        if session_id not in self.conversations:
-            self.conversations[session_id] = []
+        self._init_session(session_id)
 
         messages = self.conversations[session_id]
         messages.append({"role": "user", "content": query})
 
         openai_tools = _convert_tools(self.mcp.tools)
 
+        api_calls = 1
         response = self.client.chat.completions.create(
             model=MODEL,
             max_tokens=4096,
@@ -100,6 +208,7 @@ class MedicaidAgent:
                 })
 
             # Next iteration
+            api_calls += 1
             response = self.client.chat.completions.create(
                 model=MODEL,
                 max_tokens=4096,
@@ -111,14 +220,15 @@ class MedicaidAgent:
         # Extract final text response
         final_text = choice.message.content or ""
         messages.append({"role": "assistant", "content": final_text})
+        logger.info("Query completed: %d OpenAI API calls for session %s", api_calls, session_id)
+        self.save_conversation(session_id, self._extract_patient_id(session_id))
         return final_text
 
     async def process_query_stream(
         self, query: str, session_id: str = "default"
     ) -> AsyncGenerator[str, None]:
         """Process a query and yield text chunks as they arrive."""
-        if session_id not in self.conversations:
-            self.conversations[session_id] = []
+        self._init_session(session_id)
 
         messages = self.conversations[session_id]
         messages.append({"role": "user", "content": query})
@@ -172,6 +282,7 @@ class MedicaidAgent:
             # If no tool calls, we're done
             if finish_reason != "tool_calls":
                 messages.append({"role": "assistant", "content": collected_content})
+                self.save_conversation(session_id, self._extract_patient_id(session_id))
                 break
 
             # Store assistant message with tool calls
