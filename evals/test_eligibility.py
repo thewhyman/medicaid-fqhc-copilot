@@ -71,6 +71,55 @@ PATIENTS = [
         "annual_income": 12000.0, "is_pregnant": False,
         "has_disability": False, "is_us_citizen": True,
     },
+    # --- Border / edge cases ---
+    {   # Income exactly at threshold (CA adult, 138% of $15,650 = $21,597)
+        "id": 9, "first_name": "Elena", "last_name": "Ruiz",
+        "age": 36, "state": "CA", "household_size": 1,
+        "annual_income": 21597.0, "is_pregnant": False,
+        "has_disability": False, "is_us_citizen": True,
+    },
+    {   # Income $1 over threshold (OH adult, 138% of $15,650 = $21,597 → $21,598)
+        "id": 10, "first_name": "Kevin", "last_name": "Park",
+        "age": 38, "state": "OH", "household_size": 1,
+        "annual_income": 21598.0, "is_pregnant": False,
+        "has_disability": False, "is_us_citizen": True,
+    },
+    {   # Non-US citizen — should be ineligible regardless of income
+        "id": 11, "first_name": "Yuki", "last_name": "Tanaka",
+        "age": 31, "state": "NY", "household_size": 2,
+        "annual_income": 10000.0, "is_pregnant": False,
+        "has_disability": False, "is_us_citizen": False,
+    },
+    {   # Age 18 — child→adult boundary (loses higher child threshold)
+        "id": 12, "first_name": "Jordan", "last_name": "Lee",
+        "age": 18, "state": "FL", "household_size": 3,
+        "annual_income": 20000.0, "is_pregnant": False,
+        "has_disability": False, "is_us_citizen": True,
+    },
+    {   # Age 65 — adult→elderly boundary in non-expansion state
+        "id": 13, "first_name": "Margaret", "last_name": "Davis",
+        "age": 65, "state": "TX", "household_size": 1,
+        "annual_income": 2000.0, "is_pregnant": False,
+        "has_disability": False, "is_us_citizen": True,
+    },
+    {   # Pregnant in non-expansion state (higher pregnant threshold applies)
+        "id": 14, "first_name": "Tamika", "last_name": "Williams",
+        "age": 27, "state": "GA", "household_size": 2,
+        "annual_income": 40000.0, "is_pregnant": True,
+        "has_disability": False, "is_us_citizen": True,
+    },
+    {   # Alaska — different FPL table ($19,560 for HH=1)
+        "id": 15, "first_name": "John", "last_name": "Whitehorse",
+        "age": 41, "state": "AK", "household_size": 1,
+        "annual_income": 26000.0, "is_pregnant": False,
+        "has_disability": False, "is_us_citizen": True,
+    },
+    {   # Hawaii, household size 8 — FPL table boundary
+        "id": 16, "first_name": "Leilani", "last_name": "Kealoha",
+        "age": 34, "state": "HI", "household_size": 8,
+        "annual_income": 85000.0, "is_pregnant": False,
+        "has_disability": False, "is_us_citizen": True,
+    },
 ]
 
 
@@ -103,6 +152,21 @@ def compute_expected(patient: dict) -> dict:
     hh_size = patient["household_size"]
     income = patient["annual_income"]
     category = determine_category(patient)
+
+    # Non-citizens are ineligible (simplified — real rules have qualified immigrant exceptions)
+    if not patient.get("is_us_citizen", True):
+        fpl = get_fpl(state, hh_size)
+        return {
+            "eligible": False,
+            "ambiguous": False,
+            "category": category,
+            "fpl": fpl,
+            "income_pct": round((income / fpl) * 100, 1),
+            "threshold_pct": 0,
+            "threshold_amount": 0,
+            "expansion": STATE_THRESHOLDS.get(state, {}).get("expansion", False),
+            "reason": "not a US citizen",
+        }
 
     fpl = get_fpl(state, hh_size)
     thresholds = STATE_THRESHOLDS.get(state)
@@ -220,6 +284,14 @@ REQUIRED_KEYWORDS = {
     6: {"keyword_groups": [["disab", "disability", "disabled", "ssi"]], "state_alts": ["GA", "georgia"]},
     7: {"keyword_groups": [["adult"], ["138%", "138 %", "138 percent"]], "state_alts": ["WA", "washington"]},
     8: {"keyword_groups": [["non-expansion", "not expanded", "has not expanded"], ["18%", "18 %", "18 percent"]], "state_alts": ["AL", "alabama"]},
+    9: {"keyword_groups": [["adult"], ["138%", "138 %", "138 percent"]], "state_alts": ["CA", "california"]},
+    10: {"keyword_groups": [["adult"], ["138%", "138 %", "138 percent"]], "state_alts": ["OH", "ohio"]},
+    11: {"keyword_groups": [["citizen", "citizenship", "immigration", "non-citizen"]], "state_alts": ["NY", "new york"]},
+    12: {"keyword_groups": [["adult", "18"]], "state_alts": ["FL", "florida"]},
+    13: {"keyword_groups": [["elderly", "aged", "senior", "65"]], "state_alts": ["TX", "texas"]},
+    14: {"keyword_groups": [["pregnant", "pregnancy"], ["220", "220%"]], "state_alts": ["GA", "georgia"]},
+    15: {"keyword_groups": [["adult", "alaska"], ["138%", "138 %", "138 percent"]], "state_alts": ["AK", "alaska"]},
+    16: {"keyword_groups": [["adult"], ["138%", "138 %", "138 percent"]], "state_alts": ["HI", "hawaii"]},
 }
 
 MAX_API_CALLS = 3

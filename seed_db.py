@@ -70,6 +70,31 @@ def seed_patients(conn):
          "employment", False, False, True, "citizen", None),
         ("Michael", "Brown", "1986-12-01", 40, "AL", "Jefferson", 3, 12000.0,
          "self-employment", False, False, True, "citizen", None),
+        # --- Border / edge cases ---
+        # #9: Income exactly at threshold (CA adult, 138% of $15,650 = $21,597)
+        ("Elena", "Ruiz", "1990-04-10", 36, "CA", "San Diego", 1, 21597.0,
+         "employment", False, False, True, "citizen", None),
+        # #10: Income $1 over threshold (OH adult, 138% of $15,650 = $21,597 → $21,598)
+        ("Kevin", "Park", "1988-11-25", 38, "OH", "Cuyahoga", 1, 21598.0,
+         "employment", False, False, True, "citizen", None),
+        # #11: Non-US citizen — should be ineligible regardless of income
+        ("Yuki", "Tanaka", "1995-02-14", 31, "NY", "Queens", 2, 10000.0,
+         "employment", False, False, False, "non-immigrant", None),
+        # #12: Age 18 — just crossed from child to adult (higher threshold lost)
+        ("Jordan", "Lee", "2008-01-05", 18, "FL", "Broward", 3, 20000.0,
+         "employment", False, False, True, "citizen", None),
+        # #13: Age 65 — elderly boundary (adult → elderly category)
+        ("Margaret", "Davis", "1961-06-30", 65, "TX", "Dallas", 1, 2000.0,
+         "social_security", False, False, True, "citizen", "medicare"),
+        # #14: Pregnant in non-expansion state (higher pregnant threshold applies)
+        ("Tamika", "Williams", "1999-08-20", 27, "GA", "DeKalb", 2, 40000.0,
+         "employment", True, False, True, "citizen", None),
+        # #15: Alaska resident (different FPL table — $19,560 for HH=1)
+        ("John", "Whitehorse", "1985-03-12", 41, "AK", "Anchorage", 1, 26000.0,
+         "employment", False, False, True, "citizen", None),
+        # #16: Hawaii, large household size 8 (FPL table boundary)
+        ("Leilani", "Kealoha", "1992-07-18", 34, "HI", "Honolulu", 8, 85000.0,
+         "employment", False, False, True, "citizen", None),
     ]
 
     with conn.cursor() as cur:
