@@ -1,16 +1,21 @@
 name: Regression Evals
 
-# Run deterministic evals on every push and on a weekly schedule.
+# Run deterministic evals on every push and on a scheduled cadence.
 # Schedule catches model drift between deploys.
 # Push runs catch code regressions immediately.
+#
+# Schedule strategy:
+#   - Daily agent evals through 2026-03-24 (intensive drift monitoring week)
+#   - After that, switch back to weekly (Mondays 9am UTC)
+#   To revert to weekly: replace the cron line with "0 9 * * 1"
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   schedule:
-    # Every Monday at 9:00 AM UTC — catches drift between deploys
-    - cron: "0 9 * * 1"
+    # Daily at 9:00 AM UTC — intensive drift monitoring through 2026-03-24
+    - cron: "0 9 * * *"
 
 jobs:
   deterministic-evals:
@@ -32,9 +37,9 @@ jobs:
         run: python evals/test_eligibility.py
 
   # Agent evals require a running server + OpenAI API key.
-  # Only runs on schedule (weekly) to avoid burning API credits on every push.
+  # Only runs on schedule to avoid burning API credits on every push.
   agent-evals:
-    name: Agent Evals (weekly)
+    name: Agent Evals (scheduled)
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
     needs: deterministic-evals
@@ -100,6 +105,6 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: `Regression eval failure — ${new Date().toISOString().slice(0, 10)}`,
-              body: `Weekly agent evals failed. This may indicate model drift.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              body: `Scheduled agent evals failed. This may indicate model drift.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               labels: ['eval-regression']
             });
