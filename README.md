@@ -1,4 +1,4 @@
-# Medicaid Eligibility Copilot for FQHC Caseworkers
+# MediAssist AI — Coverage Continuity Infrastructure
 
 An **agentic AI copilot** that helps Federally Qualified Health Center (FQHC) caseworkers determine Medicaid eligibility using MCP (Model Context Protocol) servers, with built-in guardrails, memory, and an evaluation suite.
 

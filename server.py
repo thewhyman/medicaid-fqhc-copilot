@@ -38,8 +38,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Medicaid Eligibility Copilot",
-    description="Agentic AI copilot for FQHC caseworkers — determines Medicaid eligibility using MCP servers",
+    title="MediAssist AI",
+    description="Coverage continuity infrastructure — AI copilot for FQHC caseworkers determining Medicaid eligibility",
     lifespan=lifespan,
 )
 
