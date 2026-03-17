@@ -7,3 +7,6 @@ reports/*.md
 node_modules/
 .claude/
 package-lock.json
+
+docs/
+mediassistai/

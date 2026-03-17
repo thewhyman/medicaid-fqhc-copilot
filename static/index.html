@@ -1,711 +1,358 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Medicaid Eligibility Copilot</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f5f7fa; color: #1a1a2e; }
+  <title>MediAssist AI — Coverage Continuity Infrastructure</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="MediAssist AI prevents avoidable Medicaid coverage loss through AI-powered recertification workflows.">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a2e; line-height: 1.7; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
 
-  /* Header */
-  .header { background: #1a73e8; color: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-  .header h1 { font-size: 18px; font-weight: 600; }
-  .header .status { margin-left: auto; font-size: 12px; display: flex; align-items: center; gap: 6px; }
-  .header .status .dot { width: 8px; height: 8px; border-radius: 50%; background: #4caf50; }
-  .header .status .dot.offline { background: #f44336; }
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+      color: #fff;
+      padding: 80px 40px;
+      text-align: center;
+    }
+    .hero h1 { font-size: 42px; margin-bottom: 16px; font-weight: 700; }
+    .hero .tagline { font-size: 20px; opacity: 0.9; max-width: 700px; margin: 0 auto 32px; }
+    .hero .cta-group { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .hero .cta { display: inline-block; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600; }
+    .hero .cta-primary { background: #2563eb; color: #fff; }
+    .hero .cta-primary:hover { background: #1d4ed8; text-decoration: none; }
+    .hero .cta-demo { background: #10b981; color: #fff; }
+    .hero .cta-demo:hover { background: #059669; text-decoration: none; }
 
-  /* Main layout */
-  .main { display: flex; flex: 1; overflow: hidden; }
+    section { max-width: 900px; margin: 0 auto; padding: 60px 40px; }
+    section h2 { font-size: 28px; margin-bottom: 24px; color: #0f172a; }
+    section p { margin-bottom: 16px; font-size: 17px; color: #334155; }
 
-  /* Left sidebar — patients */
-  .sidebar-left { width: 280px; background: #fff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
-  .sidebar-left .section-header { padding: 16px; font-size: 14px; font-weight: 600; color: #5f6368; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; }
-  .sidebar-left .section-header button { background: #1a73e8; color: #fff; border: none; border-radius: 4px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
-  .sidebar-left .section-header button:hover { background: #1557b0; }
-  .patient-list { flex: 1; overflow-y: auto; padding: 8px; }
-  .patient-card { padding: 12px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; transition: background 0.15s; }
-  .patient-card:hover { background: #f0f4ff; }
-  .patient-card.selected { background: #e3edff; border-left: 3px solid #1a73e8; }
-  .patient-card .name { font-weight: 600; font-size: 14px; }
-  .patient-card .details { font-size: 12px; color: #5f6368; margin-top: 4px; }
-  .patient-card .details span { margin-right: 8px; }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+      margin: 32px 0;
+    }
+    .stat-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+    }
+    .stat-card .number { font-size: 32px; font-weight: 700; color: #dc2626; }
+    .stat-card .label { font-size: 14px; color: #64748b; margin-top: 8px; }
 
-  /* Patient detail banner (above chat) */
-  .patient-detail { display: none; background: #fff; border-bottom: 1px solid #e0e0e0; padding: 12px 24px; font-size: 12px; }
-  .patient-detail.visible { display: block; }
-  .patient-detail .detail-grid { display: flex; flex-wrap: wrap; gap: 4px 24px; }
-  .patient-detail .detail-item { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-  .patient-detail .detail-label { color: #5f6368; }
-  .patient-detail .detail-value { font-weight: 600; color: #1a1a2e; }
-  .patient-detail .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; }
-  .patient-detail .badge.yes { background: #e8f5e9; color: #2e7d32; }
-  .patient-detail .badge.no { background: #fce4ec; color: #c62828; }
+    .solution-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      margin: 32px 0;
+    }
+    .solution-card {
+      background: #f0f9ff;
+      border-radius: 12px;
+      padding: 28px;
+    }
+    .solution-card h3 { font-size: 18px; margin-bottom: 12px; color: #0f172a; }
+    .solution-card ul { list-style: none; padding: 0; }
+    .solution-card li { padding: 4px 0; font-size: 15px; color: #334155; }
+    .solution-card li::before { content: "- "; color: #2563eb; font-weight: 600; }
 
-  /* Center — chat */
-  .center { flex: 1; display: flex; flex-direction: column; background: #f0f2f5; }
-  .chat-header { padding: 14px 24px; border-bottom: 1px solid #e0e0e0; background: #fff; display: flex; align-items: center; gap: 12px; }
-  .chat-header h2 { font-size: 16px; font-weight: 600; }
-  .chat-header .check-btn { margin-left: auto; background: #1a73e8; color: #fff; border: none; border-radius: 20px; padding: 8px 24px; font-size: 13px; cursor: pointer; font-weight: 600; letter-spacing: 0.3px; transition: background 0.2s, box-shadow 0.2s; }
-  .chat-header .check-btn:hover { background: #1557b0; box-shadow: 0 2px 8px rgba(26,115,232,0.3); }
-  .chat-header .check-btn:disabled { background: #c5d8f0; cursor: not-allowed; box-shadow: none; }
-  .chat-messages { flex: 1; overflow-y: auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 12px; }
-  .chat-messages .empty { color: #9aa0a6; text-align: center; margin-top: 30%; font-size: 15px; line-height: 1.6; }
-  .chat-messages .empty svg { display: block; margin: 0 auto 12px; opacity: 0.3; }
-  .msg { max-width: 85%; padding: 14px 18px; border-radius: 16px; font-size: 14px; line-height: 1.7; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
-  .msg.user { align-self: flex-end; background: #1a73e8; color: #fff; border-bottom-right-radius: 4px; }
-  .msg.agent { align-self: flex-start; background: #fff; border: none; border-bottom-left-radius: 4px; }
-  .msg.agent h1, .msg.agent h2, .msg.agent h3 { font-size: 14px; font-weight: 700; margin: 10px 0 6px; color: #1a1a2e; }
-  .msg.agent strong { font-weight: 700; }
-  .msg.agent table { border-collapse: collapse; margin: 10px 0; font-size: 13px; width: 100%; }
-  .msg.agent th, .msg.agent td { border: 1px solid #e8e8e8; padding: 6px 10px; text-align: left; }
-  .msg.agent th { background: #f8f9fa; font-weight: 600; }
-  .msg.agent ul, .msg.agent ol { padding-left: 20px; margin: 6px 0; }
-  .msg.agent li { margin-bottom: 2px; }
-  .msg .typing { display: inline-block; }
-  .msg .cursor { display: inline-block; width: 2px; height: 14px; background: #1a73e8; animation: blink 0.8s infinite; vertical-align: text-bottom; margin-left: 1px; }
-  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-  .chat-input { padding: 16px 20px; border-top: 1px solid #e0e0e0; background: #fff; display: flex; gap: 8px; }
-  .chat-input input { flex: 1; border: 1px solid #e0e0e0; border-radius: 24px; padding: 10px 18px; font-size: 14px; outline: none; background: #f5f7fa; transition: border-color 0.2s, background 0.2s; }
-  .chat-input input:focus { border-color: #1a73e8; background: #fff; }
-  .chat-input button { background: #1a73e8; color: #fff; border: none; border-radius: 24px; padding: 10px 20px; cursor: pointer; font-size: 14px; transition: background 0.2s; }
-  .chat-input button:hover { background: #1557b0; }
-  .chat-input button:disabled { background: #c5d8f0; cursor: not-allowed; }
+    .lifecycle {
+      background: #0f172a;
+      color: #fff;
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      margin: 32px 0;
+      font-size: 20px;
+      letter-spacing: 0.5px;
+    }
+    .lifecycle span { color: #60a5fa; }
 
-  /* Right sidebar — reports */
-  .sidebar-right { width: 300px; background: #fff; border-left: 1px solid #e0e0e0; display: flex; flex-direction: column; }
-  .sidebar-right .section-header { padding: 16px; font-size: 14px; font-weight: 600; color: #5f6368; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e0e0e0; }
-  .report-list { padding: 8px; overflow-y: auto; }
-  .report-item { padding: 10px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; color: #1a73e8; margin-bottom: 2px; }
-  .report-item:hover { background: #f0f4ff; }
-  .report-item.selected { background: #e3edff; font-weight: 600; }
-  .report-view { flex: 1; overflow-y: auto; padding: 16px; font-size: 13px; line-height: 1.6; }
-  .report-view .placeholder { color: #9aa0a6; text-align: center; margin-top: 40px; }
-  .report-view h1, .report-view h2, .report-view h3 { font-size: 14px; font-weight: 700; margin: 12px 0 4px; }
-  .report-view table { border-collapse: collapse; margin: 8px 0; font-size: 12px; }
-  .report-view th, .report-view td { border: 1px solid #ddd; padding: 4px 8px; }
-  .report-view th { background: #f5f5f5; }
+    .roi-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 24px 0;
+    }
+    .roi-table th, .roi-table td {
+      text-align: left;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 15px;
+    }
+    .roi-table th { background: #f8fafc; color: #64748b; font-weight: 600; font-size: 13px; text-transform: uppercase; }
+    .roi-table tr:last-child td { font-weight: 700; }
 
-  /* Modal */
-  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
-  .modal-overlay.active { display: flex; }
-  .modal { background: #fff; border-radius: 12px; padding: 24px; width: 420px; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
-  .modal h3 { margin-bottom: 16px; }
-  .modal label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; margin-top: 12px; color: #5f6368; }
-  .modal input, .modal select { width: 100%; border: 1px solid #ddd; border-radius: 6px; padding: 8px 12px; font-size: 14px; }
-  .modal .row { display: flex; gap: 12px; }
-  .modal .row > div { flex: 1; }
-  .modal .actions { margin-top: 20px; display: flex; gap: 8px; justify-content: flex-end; }
-  .modal .actions button { padding: 8px 20px; border-radius: 6px; font-size: 14px; cursor: pointer; }
-  .modal .btn-cancel { background: #f5f5f5; border: 1px solid #ddd; color: #333; }
-  .modal .btn-save { background: #1a73e8; border: none; color: #fff; }
+    .agent-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .agent-item {
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .agent-item strong { display: block; margin-bottom: 4px; color: #0f172a; }
+    .agent-item span { font-size: 14px; color: #64748b; }
 
-  /* Metrics badge shown after each agent response */
-  .metrics-bar { display: flex; gap: 8px; flex-wrap: wrap; align-self: flex-start; padding: 6px 0; align-items: center; }
-  .metric-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 600; background: #f0f2f5; color: #5f6368; cursor: default; position: relative; }
-  .metric-badge.pass { background: #e8f5e9; color: #2e7d32; }
-  .metric-badge.fail { background: #fce4ec; color: #c62828; }
-  .metric-badge.warn { background: #fff8e1; color: #f57f17; }
-  .metric-badge .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: rgba(0,0,0,0.12); font-size: 9px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
-  .metric-badge.pass .info-icon { background: rgba(46,125,50,0.2); }
-  .metric-badge.fail .info-icon { background: rgba(198,40,40,0.2); }
-  .metric-badge.warn .info-icon { background: rgba(245,127,23,0.2); }
-  /* Popover detail panel */
-  .metric-detail { display: none; position: absolute; bottom: calc(100% + 8px); left: 0; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px 14px; font-size: 12px; font-weight: 400; color: #333; min-width: 280px; max-width: 380px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); z-index: 50; white-space: normal; line-height: 1.5; }
-  .metric-detail.visible { display: block; }
-  .metric-detail .detail-title { font-weight: 700; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
-  .metric-detail ul { margin: 4px 0 0; padding-left: 16px; }
-  .metric-detail li { margin-bottom: 2px; }
-</style>
+    .compliance-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin: 24px 0;
+    }
+    .compliance-card {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .compliance-card h4 { font-size: 16px; margin-bottom: 8px; color: #166534; }
+    .compliance-card p { font-size: 14px; color: #334155; margin: 0; }
+
+    .founder {
+      display: flex;
+      gap: 32px;
+      align-items: flex-start;
+      margin: 24px 0;
+    }
+    .founder-info h3 { margin-bottom: 8px; }
+    .founder-info p { font-size: 15px; }
+
+    .cta-section {
+      background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+      color: #fff;
+      text-align: center;
+      padding: 60px 40px;
+    }
+    .cta-section h2 { color: #fff; margin-bottom: 16px; }
+    .cta-section p { color: #cbd5e1; max-width: 600px; margin: 0 auto 32px; }
+    .cta-section .cta { display: inline-block; background: #2563eb; color: #fff; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600; }
+    .cta-section .cta:hover { background: #1d4ed8; text-decoration: none; }
+
+    footer { text-align: center; padding: 32px; font-size: 14px; color: #94a3b8; }
+
+    @media (max-width: 640px) {
+      .hero { padding: 48px 24px; }
+      .hero h1 { font-size: 28px; }
+      section { padding: 40px 24px; }
+      .solution-grid { grid-template-columns: 1fr; }
+      .founder { flex-direction: column; }
+    }
+  </style>
 </head>
 <body>
 
-<div class="header">
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-  <h1>Medicaid Eligibility Copilot</h1>
-  <div class="status">
-    <div class="dot" id="statusDot"></div>
-    <span id="statusText">Connecting...</span>
+<div class="hero">
+  <h1>MediAssist AI</h1>
+  <p class="tagline">Coverage continuity infrastructure for Medicaid. We prevent avoidable loss of healthcare coverage for vulnerable populations.</p>
+  <div class="cta-group">
+    <a class="cta cta-demo" href="/copilot">Try the Eligibility Copilot</a>
+    <a class="cta cta-primary" href="mailto:avallam@thewhyman.com">Get in Touch</a>
   </div>
 </div>
 
-<div class="main">
-  <!-- Left sidebar: Patients -->
-  <div class="sidebar-left">
-    <div class="section-header">
-      Patients
-      <button onclick="openAddPatient()">+ Add</button>
-    </div>
-    <div class="patient-list" id="patientList"></div>
-  </div>
+<section>
+  <h2>The Problem</h2>
+  <p>Every year, hundreds of thousands of patients lose Medicaid coverage — not because they are ineligible, but because the system fails them. During the 2023-2024 Medicaid unwinding:</p>
 
-  <!-- Center: Chat -->
-  <div class="center">
-    <div class="chat-header">
-      <h2 id="chatTitle">Select a patient</h2>
-      <button class="check-btn" id="checkBtn" onclick="checkEligibility()" disabled>Check Eligibility</button>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="number">25.3M</div>
+      <div class="label">People lost Medicaid coverage</div>
     </div>
-    <div class="patient-detail" id="patientDetail"></div>
-    <div class="chat-messages" id="chatMessages">
-      <div class="empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>Select a patient to check Medicaid eligibility.</div>
+    <div class="stat-card">
+      <div class="number">69%</div>
+      <div class="label">Were procedural — not ineligible</div>
     </div>
-    <div class="chat-input">
-      <input type="text" id="chatInput" placeholder="Ask a follow-up question..." onkeydown="if(event.key==='Enter')sendMessage()" disabled>
-      <button onclick="sendMessage()" id="sendBtn" disabled>Send</button>
+    <div class="stat-card">
+      <div class="number">17.5M</div>
+      <div class="label">Lost coverage due to paperwork failure</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">28</div>
+      <div class="label">States flagged by CMS for excessive rates</div>
     </div>
   </div>
 
-  <!-- Right sidebar: Reports -->
-  <div class="sidebar-right">
-    <div class="section-header">Reports</div>
-    <div class="report-list" id="reportList"></div>
-    <div class="report-view" id="reportView">
-      <div class="placeholder">Select a report to view</div>
+  <p>This is a workflow failure problem, not a policy problem. And the policy environment is making it worse — the federal government has signaled it will not approve new continuous eligibility waivers. Technology-driven recertification is the only remaining lever.</p>
+</section>
+
+<section>
+  <h2>The Solution</h2>
+
+  <div class="solution-grid">
+    <div class="solution-card">
+      <h3>AI Copilot for Caseworkers</h3>
+      <ul>
+        <li>Risk-ranked patient dashboard</li>
+        <li>Next-best-action recommendations</li>
+        <li>Automated outreach sequences</li>
+        <li>Portfolio-level visibility</li>
+      </ul>
     </div>
+    <div class="solution-card">
+      <h3>Autonomous Patient Agents</h3>
+      <ul>
+        <li>SMS and voice interaction</li>
+        <li>Multilingual, plain language</li>
+        <li>Step-by-step guided workflows</li>
+        <li>Document collection assistance</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="lifecycle">
+    <span>Eligibility</span> &rarr; <span>Recertification</span> &rarr; <span>Retention</span> &rarr; <span>Insights</span>
+  </div>
+</section>
+
+<section>
+  <h2>Agent Architecture</h2>
+  <p>Six specialized AI agents, each independently testable, coordinated by a central orchestrator:</p>
+
+  <div class="agent-list">
+    <div class="agent-item">
+      <strong>Risk Scoring Agent</strong>
+      <span>Prioritizes patients by likelihood of coverage loss</span>
+    </div>
+    <div class="agent-item">
+      <strong>Outreach Agent</strong>
+      <span>TCPA-compliant SMS/voice communication sequences</span>
+    </div>
+    <div class="agent-item">
+      <strong>Conversation Agent</strong>
+      <span>Multilingual Q&A, guidance, and instructions</span>
+    </div>
+    <div class="agent-item">
+      <strong>Document Intelligence</strong>
+      <span>Parses, validates, and verifies uploaded documents</span>
+    </div>
+    <div class="agent-item">
+      <strong>Workflow Orchestrator</strong>
+      <span>Manages state transitions and triggers next actions</span>
+    </div>
+    <div class="agent-item">
+      <strong>Caseworker Copilot</strong>
+      <span>Surfaces insights and suggests actions</span>
+    </div>
+  </div>
+
+  <p>Evaluation-first architecture: every agent action is measured. Deterministic guardrails catch errors before they reach patients.</p>
+</section>
+
+<section>
+  <h2>ROI Per FQHC</h2>
+
+  <table class="roi-table">
+    <thead>
+      <tr><th>Line Item</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Medicaid patients per FQHC</td><td>~11,250</td></tr>
+      <tr><td>At risk of procedural loss (6.5%)</td><td>~750/year</td></tr>
+      <tr><td>Revenue per patient/year</td><td>~$720-$820</td></tr>
+      <tr><td>Avoidable revenue loss</td><td>~$500K-$650K/year</td></tr>
+      <tr><td>Recoverable (50-80%)</td><td>$250K-$520K/year</td></tr>
+      <tr><td>+ Operational savings</td><td>$75K-$150K/year</td></tr>
+      <tr><td>MediAssist AI cost</td><td>$120K-$300K/year</td></tr>
+      <tr><td>Net ROI</td><td>2x-4x</td></tr>
+    </tbody>
+  </table>
+
+  <p>This is not a cost center — it is value protection. FQHCs already lose this revenue. Patients who lose Medicaid still come (FQHCs must serve all) but reimbursement drops from $175-200/visit to $0-40 on the sliding fee scale.</p>
+</section>
+
+<section>
+  <h2>Market</h2>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="number" style="color: #0f172a;">$2.8B</div>
+      <div class="label">TAM — 77M Medicaid enrollees</div>
+    </div>
+    <div class="stat-card">
+      <div class="number" style="color: #0f172a;">$600M</div>
+      <div class="label">SAM — 17M FQHC Medicaid patients</div>
+    </div>
+    <div class="stat-card">
+      <div class="number" style="color: #0f172a;">$50-80M</div>
+      <div class="label">SOM — CA FQHC entry market</div>
+    </div>
+  </div>
+
+  <p>Built bottom-up from CMS enrollment data, NACHC/HRSA FQHC stats, and KFF procedural disenrollment rates.</p>
+</section>
+
+<section>
+  <h2>Compliance</h2>
+
+  <div class="compliance-grid">
+    <div class="compliance-card">
+      <h4>HIPAA</h4>
+      <p>BAA chain at every link. Minimum necessary data per agent. AES-256 encryption. 6-year audit trail retention.</p>
+    </div>
+    <div class="compliance-card">
+      <h4>TCPA</h4>
+      <p>Consent management system. AI disclosure on voice calls. Frequency caps. State mini-TCPA compliance (FL/OK standard).</p>
+    </div>
+    <div class="compliance-card">
+      <h4>CMS</h4>
+      <p>Plain language (6th-8th grade). Multilingual. Accessible for disabilities. Clear action/deadline/consequences.</p>
+    </div>
+    <div class="compliance-card">
+      <h4>Certifications</h4>
+      <p>SOC 2 Type II (Month 1-6). HITRUST i1 (Month 6-18). HITRUST r2 for state contracts.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Live Prototype — Eligibility Copilot</h2>
+  <p>Phase 1 of MediAssist AI is live. We have built and deployed a production-grade Medicaid eligibility determination system that validates the core technical approach:</p>
+  <ul style="margin: 16px 0 16px 24px; color: #334155;">
+    <li>AI agent covering all 50 states with autonomous reasoning and tool use</li>
+    <li>Deterministic guardrails that catch and correct LLM errors in real-time</li>
+    <li>Eval-gated deployment — broken code doesn't ship</li>
+    <li>100% correctness on 16 edge cases (income boundaries, state rules, demographic transitions)</li>
+  </ul>
+  <p>This proves AI-driven Medicaid workflows can achieve healthcare-grade reliability.</p>
+  <div style="margin-top: 24px; text-align: center;">
+    <a class="cta cta-demo" href="/copilot" style="display: inline-block; background: #10b981; color: #fff; padding: 16px 40px; border-radius: 8px; font-size: 18px; font-weight: 600; text-decoration: none;">Try the Eligibility Copilot — Live Demo</a>
+    <p style="margin-top: 12px; font-size: 14px; color: #64748b;">Query any of 16 seed patients across all 50 states. No login required.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Founder</h2>
+  <div class="founder">
+    <div class="founder-info">
+      <h3>Anand Vallamsetla</h3>
+      <p>HIPAA-certified Business Analyst who led Medicaid fraud case management systems at 21CT. Built and deployed the MediAssist AI eligibility prototype with production-grade AI reliability patterns.</p>
+      <p style="margin-top: 8px;">UC Berkeley Haas | TOGAF 9 | AI Certifications (DeepLearning.AI, Anthropic) | Multiple AI hackathon wins (Google, AGI House)</p>
+      <p style="margin-top: 8px;"><a href="https://www.linkedin.com/in/thewhyman/">LinkedIn</a></p>
+    </div>
+  </div>
+</section>
+
+<div class="cta-section">
+  <h2>Let's Talk</h2>
+  <p>We're partnering with FQHCs for pilot programs and raising a pre-seed round to build coverage continuity infrastructure for Medicaid.</p>
+  <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+    <a class="cta" href="/copilot" style="background: #10b981;">Try the Copilot</a>
+    <a class="cta" href="mailto:avallam@thewhyman.com">avallam@thewhyman.com</a>
   </div>
 </div>
 
-<!-- Add Patient Modal -->
-<div class="modal-overlay" id="addPatientModal">
-  <div class="modal">
-    <h3>Add New Patient</h3>
-    <div class="row">
-      <div><label>First Name</label><input id="pFirstName"></div>
-      <div><label>Last Name</label><input id="pLastName"></div>
-    </div>
-    <div class="row">
-      <div><label>Date of Birth</label><input id="pDob" type="date"></div>
-      <div><label>Age</label><input id="pAge" type="number"></div>
-    </div>
-    <div class="row">
-      <div><label>State</label><input id="pState" maxlength="2" placeholder="e.g. CA"></div>
-      <div><label>County</label><input id="pCounty"></div>
-    </div>
-    <div class="row">
-      <div><label>Household Size</label><input id="pHousehold" type="number" value="1"></div>
-      <div><label>Annual Income</label><input id="pIncome" type="number" placeholder="e.g. 25000"></div>
-    </div>
-    <label>Income Source</label>
-    <input id="pIncomeSource" placeholder="e.g. employment">
-    <div class="row">
-      <div><label>Pregnant</label><select id="pPregnant"><option value="false">No</option><option value="true">Yes</option></select></div>
-      <div><label>Disability</label><select id="pDisability"><option value="false">No</option><option value="true">Yes</option></select></div>
-    </div>
-    <div class="row">
-      <div><label>US Citizen</label><select id="pCitizen"><option value="true">Yes</option><option value="false">No</option></select></div>
-      <div><label>Current Insurance</label><input id="pInsurance" placeholder="e.g. none"></div>
-    </div>
-    <div class="actions">
-      <button class="btn-cancel" onclick="closeAddPatient()">Cancel</button>
-      <button class="btn-save" onclick="savePatient()">Save</button>
-    </div>
-  </div>
-</div>
+<footer>
+  MediAssist AI &mdash; Coverage Continuity Infrastructure
+</footer>
 
-<script>
-let selectedPatient = null;
-let sessionId = null;
-let isStreaming = false;
-// Persist chat history across same-tab page navigations via sessionStorage
-const chatHistory = JSON.parse(sessionStorage.getItem('chatHistory') || '{}');
-function saveChatHistory() { sessionStorage.setItem('chatHistory', JSON.stringify(chatHistory)); }
-
-// --- Markdown renderer ---
-function stripLatex(raw) {
-  // Convert LaTeX to readable plain math
-  return raw
-    .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, '($1 / $2)')  // \frac{a}{b} -> (a / b)
-    .replace(/\\times/g, '*')
-    .replace(/\\approx/g, '≈')
-    .replace(/\\leq/g, '≤').replace(/\\geq/g, '≥')
-    .replace(/\\left[(\[{]/g, '').replace(/\\right[)\]}]/g, '')  // \left( \right)
-    .replace(/\\(?:text|mathrm|mathbf)\{([^}]*)\}/g, '$1')
-    .replace(/\\%/g, '%')
-    .replace(/\\\$/g, '$')
-    .replace(/\\[a-zA-Z]+/g, '')  // remove remaining \commands
-    .replace(/[{}]/g, '')  // remove leftover braces
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
-
-function renderMd(text) {
-  // Convert LaTeX math notation GPT-4o sometimes emits to readable text
-  let s = text
-    .replace(/\\\[(.+?)\\\]/gs, (_, m) => stripLatex(m))
-    .replace(/\\\((.+?)\\\)/gs, (_, m) => stripLatex(m))
-    .replace(/\$\$(.+?)\$\$/gs, (_, m) => stripLatex(m))
-    .replace(/\$(.+?)\$/g, (_, m) => stripLatex(m));
-  // Escape HTML
-  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  // Headers
-  s = s.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  s = s.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  s = s.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-  // Bold and italic (allow multiline spans)
-  s = s.replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>');
-  s = s.replace(/\*(.+?)\*/gs, '<em>$1</em>');
-  // Inline code
-  s = s.replace(/`(.+?)`/gs, '<code>$1</code>');
-  // Horizontal rule
-  s = s.replace(/^---+$/gm, '<hr>');
-  // Tables — collect consecutive | lines
-  s = s.replace(/((?:^\|.+\|$\n?)+)/gm, function(table) {
-    const rows = table.trim().split('\n').filter(r => !r.match(/^\|[\s\-:|]+\|$/));
-    if (rows.length === 0) return table;
-    let t = '<table>';
-    rows.forEach((row, i) => {
-      const cells = row.split('|').filter(c => c.trim() !== '');
-      const tag = i === 0 ? 'th' : 'td';
-      t += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
-    });
-    return t + '</table>';
-  });
-  // Lists — unordered
-  s = s.replace(/^[ ]*- (.+)$/gm, '<li>$1</li>');
-  // Lists — ordered
-  s = s.replace(/^[ ]*\d+\. (.+)$/gm, '<li>$1</li>');
-  // Wrap consecutive <li> in <ul>
-  s = s.replace(/((?:<li>.+?<\/li>\s*)+)/gs, '<ul>$1</ul>');
-  // Paragraphs
-  s = s.replace(/\n\n+/g, '<br><br>');
-  s = s.replace(/\n/g, '<br>');
-  return s;
-}
-
-// --- Health check ---
-async function checkHealth() {
-  try {
-    const r = await fetch('/health');
-    const data = await r.json();
-    document.getElementById('statusDot').className = 'dot';
-    document.getElementById('statusText').textContent = data.mcp_servers.join(', ');
-  } catch {
-    document.getElementById('statusDot').className = 'dot offline';
-    document.getElementById('statusText').textContent = 'Disconnected';
-  }
-}
-
-// --- Patients ---
-async function loadPatients() {
-  const r = await fetch('/patients');
-  const data = await r.json();
-  const list = document.getElementById('patientList');
-  list.innerHTML = '';
-  data.patients.forEach(p => {
-    const card = document.createElement('div');
-    card.className = 'patient-card' + (selectedPatient && selectedPatient.id === p.id ? ' selected' : '');
-    card.innerHTML = `
-      <div class="name">${p.first_name} ${p.last_name}</div>
-      <div class="details">
-        <span>Age ${p.age}</span>
-        <span>${p.state}</span>
-        <span>$${Number(p.annual_income).toLocaleString()}</span>
-      </div>`;
-    card.onclick = () => selectPatient(p);
-    list.appendChild(card);
-  });
-}
-
-async function selectPatient(p) {
-  const chatArea = document.getElementById('chatMessages');
-
-  // Save current patient's chat history before switching
-  if (selectedPatient && chatArea.innerHTML) {
-    chatHistory[selectedPatient.id] = { html: chatArea.innerHTML, sessionId };
-    saveChatHistory();
-  }
-
-  selectedPatient = p;
-  document.getElementById('chatTitle').textContent = `${p.first_name} ${p.last_name} — ${p.state}`;
-  document.getElementById('checkBtn').disabled = false;
-  document.getElementById('chatInput').disabled = false;
-  document.getElementById('sendBtn').disabled = false;
-
-  // 1. Check in-memory/sessionStorage cache first
-  if (chatHistory[p.id]) {
-    chatArea.innerHTML = chatHistory[p.id].html;
-    sessionId = chatHistory[p.id].sessionId;
-  } else {
-    // 2. Try to restore from server (Postgres)
-    let restored = false;
-    try {
-      const r = await fetch(`/patients/${p.id}/sessions`);
-      const data = await r.json();
-      if (data.sessions && data.sessions.length > 0) {
-        const latest = data.sessions[0]; // most recent
-        sessionId = latest.session_id;
-        const sr = await fetch(`/sessions/${sessionId}`);
-        const sdata = await sr.json();
-        if (sdata.messages && sdata.messages.length > 0) {
-          chatArea.innerHTML = '';
-          sdata.messages.forEach(msg => {
-            if (msg.role === 'user' || msg.role === 'assistant') {
-              addMessage(msg.role === 'assistant' ? 'agent' : 'user', msg.content || '');
-            }
-          });
-          chatHistory[p.id] = { html: chatArea.innerHTML, sessionId };
-          saveChatHistory();
-          restored = true;
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to load saved session:', e);
-    }
-    if (!restored) {
-      sessionId = 'patient-' + p.id + '-' + Date.now();
-      chatArea.innerHTML = '<div class="empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Click <strong>Check Eligibility</strong> to start<br>or ask a question below.</div>';
-    }
-  }
-
-  loadPatients(); // refresh selection highlight
-  showPatientDetail(p);
-}
-
-function showPatientDetail(p) {
-  const panel = document.getElementById('patientDetail');
-  panel.classList.add('visible');
-  const badge = (val) =>
-    `<span class="badge ${val ? 'yes' : 'no'}">${val ? 'Yes' : 'No'}</span>`;
-  const item = (label, value) =>
-    `<div class="detail-item"><span class="detail-label">${label}:</span> <span class="detail-value">${value}</span></div>`;
-  panel.innerHTML = `<div class="detail-grid">
-    ${item('DOB', p.date_of_birth || 'N/A')}
-    ${item('Age', p.age)}
-    ${item('State', p.state + (p.county ? ', ' + p.county : ''))}
-    ${item('Household', p.household_size)}
-    ${item('Income', '$' + Number(p.annual_income).toLocaleString())}
-    ${item('Source', p.income_source || 'N/A')}
-    ${item('Pregnant', badge(p.is_pregnant))}
-    ${item('Disability', badge(p.has_disability))}
-    ${item('Citizen', badge(p.is_us_citizen))}
-    ${item('Insurance', p.current_insurance || 'None')}
-  </div>`;
-}
-
-// --- Chat ---
-function addMessage(role, content) {
-  const area = document.getElementById('chatMessages');
-  const div = document.createElement('div');
-  div.className = 'msg ' + role;
-  if (role === 'agent') {
-    div.innerHTML = renderMd(content);
-  } else {
-    div.textContent = content;
-  }
-  area.appendChild(div);
-  area.scrollTop = area.scrollHeight;
-  return div;
-}
-
-function createStreamingBubble() {
-  const area = document.getElementById('chatMessages');
-  const div = document.createElement('div');
-  div.className = 'msg agent';
-  div.innerHTML = '<span class="typing"></span><span class="cursor"></span>';
-  area.appendChild(div);
-  area.scrollTop = area.scrollHeight;
-  return div;
-}
-
-async function streamResponse(displayText, query) {
-  // Show user message and stream agent response
-  if (isStreaming) return;
-  isStreaming = true;
-  setInputState(false);
-  addMessage('user', displayText);
-  await streamRaw(query || displayText);
-}
-
-async function streamRaw(query) {
-  // Stream agent response (caller handles isStreaming and user bubble)
-  if (!isStreaming) { isStreaming = true; setInputState(false); }
-  const bubble = createStreamingBubble();
-  let fullText = '';
-
-  try {
-    const r = await fetch('/check/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, session_id: sessionId }),
-    });
-
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      fullText += chunk;
-      // Live-render markdown as it streams in
-      bubble.innerHTML = renderMd(fullText) + '<span class="cursor"></span>';
-      const area = document.getElementById('chatMessages');
-      area.scrollTop = area.scrollHeight;
-    }
-  } catch (e) {
-    fullText += '\n\n[Error: connection lost]';
-  }
-
-  // Final render without cursor
-  bubble.innerHTML = renderMd(fullText);
-  isStreaming = false;
-  setInputState(true);
-
-  // Fetch and display metrics (guardrail, QA, latency)
-  await showMetrics();
-
-  // Save chat history for current patient
-  if (selectedPatient) {
-    chatHistory[selectedPatient.id] = {
-      html: document.getElementById('chatMessages').innerHTML,
-      sessionId,
-    };
-    saveChatHistory();
-  }
-
-  loadReports(); // refresh in case a new report was saved
-}
-
-function makeBadge(cls, label, detailHtml) {
-  const span = document.createElement('span');
-  span.className = 'metric-badge ' + cls;
-  span.innerHTML = label;
-  if (detailHtml) {
-    const icon = document.createElement('span');
-    icon.className = 'info-icon';
-    icon.textContent = 'i';
-    const detail = document.createElement('div');
-    detail.className = 'metric-detail';
-    detail.innerHTML = detailHtml;
-    icon.onclick = (e) => {
-      e.stopPropagation();
-      // Close any other open popovers
-      document.querySelectorAll('.metric-detail.visible').forEach(d => {
-        if (d !== detail) d.classList.remove('visible');
-      });
-      detail.classList.toggle('visible');
-    };
-    span.appendChild(icon);
-    span.appendChild(detail);
-  }
-  return span;
-}
-
-async function showMetrics() {
-  try {
-    const r = await fetch('/metrics');
-    const m = await r.json();
-    if (!m || !m.session_id) return;
-    const area = document.getElementById('chatMessages');
-    const bar = document.createElement('div');
-    bar.className = 'metrics-bar';
-    const g = m.guardrail_details;
-
-    // If guardrail/QA were skipped (Mem0 cache, follow-up, etc.)
-    if (m.skipped_reason && m.guardrail_match === null) {
-      bar.appendChild(makeBadge('warn', 'Guardrail: Skipped',
-        '<div class="detail-title">Guardrail Skipped</div>' + m.skipped_reason));
-      bar.appendChild(makeBadge('warn', 'QA: Skipped',
-        '<div class="detail-title">QA Skipped</div>' + m.skipped_reason));
-    } else {
-      // Guardrail badge with full engine details
-      if (m.guardrail_match !== null && m.guardrail_match !== undefined) {
-        const cls = m.guardrail_match ? 'pass' : 'fail';
-        const label = m.guardrail_match ? 'Guardrail: Match' : 'Guardrail: MISMATCH';
-        let detail = '<div class="detail-title">' + (m.guardrail_match ? 'Guardrail Check Passed' : 'Guardrail Mismatch Detected') + '</div>';
-        if (g) {
-          const engStatus = g.engine_eligible ? 'ELIGIBLE' : 'NOT ELIGIBLE';
-          const llmStatus = g.llm_eligible === true ? 'ELIGIBLE' : g.llm_eligible === false ? 'NOT ELIGIBLE' : 'UNKNOWN';
-          detail += '<b>Deterministic engine says:</b> ' + engStatus + '<br>';
-          detail += '<b>LLM says:</b> ' + llmStatus + '<br>';
-          detail += '<hr style="margin:6px 0;border:none;border-top:1px solid #e0e0e0">';
-          detail += '<b>Category:</b> ' + g.category + '<br>';
-          detail += '<b>FPL:</b> $' + Number(g.fpl).toLocaleString() + '<br>';
-          detail += '<b>Income:</b> ' + g.income_pct + '% of FPL<br>';
-          detail += '<b>Threshold:</b> ' + g.threshold_pct + '% FPL = $' + Number(g.threshold_amount).toLocaleString() + '<br>';
-          detail += '<b>Expansion state:</b> ' + (g.expansion ? 'Yes' : 'No') + '<br>';
-          if (g.reason) {
-            detail += '<hr style="margin:6px 0;border:none;border-top:1px solid #e0e0e0">';
-            detail += '<b>Reason:</b> ' + g.reason;
-          }
-        }
-        if (!m.guardrail_match) {
-          detail += '<hr style="margin:6px 0;border:none;border-top:1px solid #e0e0e0">';
-          detail += '<em>A correction using the engine\'s calculation was appended to the response.</em>';
-        }
-        bar.appendChild(makeBadge(cls, label, detail));
-      }
-
-      // QA badge with full issue details
-      if (m.qa_approved !== null && m.qa_approved !== undefined) {
-        const cls = m.qa_approved ? 'pass' : 'warn';
-        const label = m.qa_approved ? 'QA: Approved' : 'QA: Issues Found';
-        let detail = '<div class="detail-title">QA Agent Review</div>';
-        detail += 'A second LLM (QA agent) reviewed this determination checking:<ul>'
-          + '<li>Correct eligibility category</li>'
-          + '<li>Correct FPL table (US/Alaska/Hawaii)</li>'
-          + '<li>Income comparison math</li>'
-          + '<li>Citizenship check applied</li>'
-          + '<li>State expansion status</li></ul>';
-        if (m.qa_approved) {
-          detail += '<b>Result:</b> All checks passed. No errors found.';
-        } else {
-          detail += '<hr style="margin:6px 0;border:none;border-top:1px solid #e0e0e0">';
-          detail += '<b>Issues found:</b>';
-          if (m.qa_issues && m.qa_issues.length > 0) {
-            detail += '<ul>' + m.qa_issues.map(i => `<li>${i}</li>`).join('') + '</ul>';
-          }
-          if (m.qa_corrected_eligible !== null && m.qa_corrected_eligible !== undefined) {
-            detail += '<b>QA corrected answer:</b> ' + (m.qa_corrected_eligible ? 'ELIGIBLE' : 'NOT ELIGIBLE');
-          }
-        }
-        bar.appendChild(makeBadge(cls, label, detail));
-      }
-    }
-
-    // Latency
-    if (m.latency_ms) {
-      const secs = (m.latency_ms / 1000).toFixed(1);
-      let detail = '<div class="detail-title">Latency Breakdown</div>';
-      detail += '<b>Total:</b> ' + m.latency_ms.toLocaleString() + 'ms (' + secs + 's)<br>';
-      detail += '<b>Includes:</b><ul>';
-      detail += '<li>OpenAI API calls (' + m.api_calls + ' round-trips)</li>';
-      if (m.tool_names && m.tool_names.length > 0) detail += '<li>MCP tool execution (' + m.tool_names.join(', ') + ')</li>';
-      if (m.guardrail_match !== null) detail += '<li>Deterministic guardrail check</li>';
-      if (m.qa_approved !== null) detail += '<li>QA agent review (1 API call)</li>';
-      detail += '</ul>';
-      if (m.input_tokens || m.output_tokens) {
-        detail += '<b>Tokens:</b> ' + (m.input_tokens || 0).toLocaleString() + ' in / ' + (m.output_tokens || 0).toLocaleString() + ' out';
-      }
-      bar.appendChild(makeBadge('', secs + 's', detail));
-    }
-
-    // API calls
-    if (m.api_calls) {
-      const tools = m.tool_names && m.tool_names.length > 0 ? m.tool_names : [];
-      let detail = '<div class="detail-title">API Call Breakdown</div>';
-      detail += '<b>Total:</b> ' + m.api_calls + ' OpenAI API round-trips<br>';
-      detail += '<b>Breakdown:</b><ul>';
-      detail += '<li>1 initial call (send query + system prompt)</li>';
-      if (tools.length > 0) {
-        detail += '<li>' + tools.length + ' tool execution round' + (tools.length > 1 ? 's' : '') + ': ' + tools.join(', ') + '</li>';
-      }
-      detail += '<li>1 final response (after tool results)</li>';
-      if (m.qa_approved !== null) detail += '<li>1 QA agent review call</li>';
-      detail += '</ul>';
-      if (m.total_tokens) {
-        detail += '<b>Total tokens:</b> ' + m.total_tokens.toLocaleString();
-      }
-      bar.appendChild(makeBadge('', m.api_calls + ' API calls', detail));
-    }
-
-    if (bar.children.length > 0) {
-      area.appendChild(bar);
-      area.scrollTop = area.scrollHeight;
-    }
-  } catch (e) {
-    console.warn('Failed to fetch metrics:', e);
-  }
-}
-
-// Close popovers when clicking outside
-document.addEventListener('click', () => {
-  document.querySelectorAll('.metric-detail.visible').forEach(d => d.classList.remove('visible'));
-});
-
-function setInputState(enabled) {
-  document.getElementById('chatInput').disabled = !enabled;
-  document.getElementById('sendBtn').disabled = !enabled;
-  document.getElementById('checkBtn').disabled = !enabled || !selectedPatient;
-}
-
-function checkEligibility() {
-  if (!selectedPatient) return;
-  const msg = `Check Medicaid eligibility for patient ID ${selectedPatient.id}`;
-  streamResponse(msg, msg);
-}
-
-function sendMessage() {
-  const input = document.getElementById('chatInput');
-  const text = input.value.trim();
-  if (!text || isStreaming) return;
-  input.value = '';
-  // Prepend patient context so the agent knows who we're asking about
-  let query = text;
-  if (selectedPatient) {
-    query = `[Context: Currently viewing patient ${selectedPatient.first_name} ${selectedPatient.last_name}, ID ${selectedPatient.id}]\n\n${text}`;
-  }
-  streamResponse(text, query);
-}
-
-// --- Reports ---
-async function loadReports() {
-  try {
-    const r = await fetch('/reports');
-    const data = await r.json();
-    const list = document.getElementById('reportList');
-    list.innerHTML = '';
-    if (data.reports.length === 0) {
-      list.innerHTML = '<div style="padding:12px;color:#9aa0a6;font-size:13px;">No reports yet</div>';
-      return;
-    }
-    data.reports.forEach(name => {
-      const div = document.createElement('div');
-      div.className = 'report-item';
-      div.textContent = name;
-      div.onclick = () => viewReport(name, div);
-      list.appendChild(div);
-    });
-  } catch {}
-}
-
-async function viewReport(filename, el) {
-  document.querySelectorAll('.report-item').forEach(e => e.classList.remove('selected'));
-  el.classList.add('selected');
-  const r = await fetch(`/reports/${filename}`);
-  const data = await r.json();
-  document.getElementById('reportView').innerHTML = renderMd(data.content);
-}
-
-// --- Add Patient Modal ---
-function openAddPatient() {
-  document.getElementById('addPatientModal').classList.add('active');
-}
-
-function closeAddPatient() {
-  document.getElementById('addPatientModal').classList.remove('active');
-}
-
-async function savePatient() {
-  const body = {
-    first_name: document.getElementById('pFirstName').value,
-    last_name: document.getElementById('pLastName').value,
-    date_of_birth: document.getElementById('pDob').value,
-    age: parseInt(document.getElementById('pAge').value),
-    state: document.getElementById('pState').value.toUpperCase(),
-    county: document.getElementById('pCounty').value || null,
-    household_size: parseInt(document.getElementById('pHousehold').value),
-    annual_income: parseFloat(document.getElementById('pIncome').value),
-    income_source: document.getElementById('pIncomeSource').value || null,
-    is_pregnant: document.getElementById('pPregnant').value === 'true',
-    has_disability: document.getElementById('pDisability').value === 'true',
-    is_us_citizen: document.getElementById('pCitizen').value === 'true',
-    current_insurance: document.getElementById('pInsurance').value || null,
-  };
-  await fetch('/patients', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  closeAddPatient();
-  loadPatients();
-}
-
-// --- Init ---
-checkHealth();
-loadPatients();
-loadReports();
-setInterval(checkHealth, 30000);
-</script>
 </body>
 </html>

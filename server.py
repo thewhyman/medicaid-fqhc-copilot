@@ -46,8 +46,14 @@ app = FastAPI(
 
 @app.get("/")
 async def root():
-    """Serve the FQHC Copilot UI."""
+    """Serve the MediAssist AI home page."""
     return FileResponse("static/index.html")
+
+
+@app.get("/copilot")
+async def copilot():
+    """Serve the FQHC Copilot UI."""
+    return FileResponse("static/copilot.html")
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
