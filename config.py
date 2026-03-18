@@ -29,6 +29,10 @@ MAX_TOOL_RESULT_LENGTH = 10000
 # MCP connection retry limit
 MAX_MCP_RETRIES = 2
 
+# Eval thresholds
+MAX_API_CALLS_EVAL = 4  # 1 initial + 1 tool execution + 1 final response + 1 QA review
+BANNED_TOOLS = ["fetch"]
+
 
 def _find_npm_package(package_name: str) -> str | None:
     """Find the JS entry point of a locally-installed npm MCP server package.

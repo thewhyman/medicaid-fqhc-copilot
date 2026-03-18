@@ -1,6 +1,7 @@
 """FastAPI web server wrapping the Medicaid Eligibility Agent."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,7 +12,6 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from agent import MedicaidAgent
 from config import DATABASE_URL, REPORTS_DIR
 
 logging.basicConfig(
@@ -20,7 +20,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-agent = MedicaidAgent()
+USE_ROUTER = os.environ.get("USE_ROUTER", "true").lower() == "true"
+if USE_ROUTER:
+    from router import Router
+    agent = Router()
+    logger.info("Using multi-agent Router")
+else:
+    from agent import MedicaidAgent
+    agent = MedicaidAgent()
+    logger.info("Using monolith MedicaidAgent")
 
 
 def get_db():
