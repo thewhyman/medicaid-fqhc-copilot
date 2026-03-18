@@ -13,6 +13,7 @@ from openai import OpenAI
 
 from agents.base import AgentResult
 from config import MAX_AGENT_ITERATIONS, MAX_TOOL_RESULT_LENGTH, MODEL
+from eligibility import compute_eligibility
 from mcp_manager import MCPManager
 
 logger = logging.getLogger(__name__)
@@ -305,3 +306,59 @@ class EligibilityAgent:
                     "tool_call_id": tc["id"],
                     "content": result_text,
                 })
+
+    @staticmethod
+    def check_renewal_eligibility(patient: dict, updated_info: dict) -> AgentResult:
+        """Compare current vs updated eligibility for renewal.
+
+        Computes eligibility for both the original patient record and the
+        updated record, then reports what changed and the recommended action.
+
+        Args:
+            patient: Original patient record.
+            updated_info: Dict of changed fields (e.g. new income, new state).
+
+        Returns:
+            AgentResult with data containing still_eligible, changes, action.
+        """
+        current = compute_eligibility(patient)
+        updated_patient = {**patient, **updated_info}
+        renewed = compute_eligibility(updated_patient)
+
+        changes = []
+        for field in ("category", "eligible", "income_pct", "threshold_pct", "expansion"):
+            if current.get(field) != renewed.get(field):
+                changes.append({
+                    "field": field,
+                    "from": current.get(field),
+                    "to": renewed.get(field),
+                })
+
+        if renewed.get("ambiguous"):
+            action = "caseworker_review_required"
+        elif renewed["eligible"]:
+            action = "approve_renewal"
+        elif not renewed["eligible"]:
+            action = "notify_patient_ineligible_with_alternatives"
+        else:
+            action = "caseworker_review_required"
+
+        return AgentResult(
+            success=True,
+            data={
+                "still_eligible": renewed["eligible"],
+                "changes": changes,
+                "previous": current,
+                "renewed": renewed,
+                "action": action,
+            },
+            audit_log_entry={
+                "actor": "eligibility_agent",
+                "action": "renewal_eligibility_checked",
+                "details": {
+                    "still_eligible": renewed["eligible"],
+                    "change_count": len(changes),
+                    "action": action,
+                },
+            },
+        )

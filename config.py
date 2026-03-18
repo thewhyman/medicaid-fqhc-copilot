@@ -33,6 +33,38 @@ MAX_MCP_RETRIES = 2
 MAX_API_CALLS_EVAL = 4  # 1 initial + 1 tool execution + 1 final response + 1 QA review
 BANNED_TOOLS = ["fetch"]
 
+# --- Phase 2: Recertification Engine ---
+
+# TCPA compliance
+SMS_FREQUENCY_CAP_WEEKLY = 3
+SMS_FREQUENCY_CAP_DAILY = 1
+QUIET_HOURS = (8, 21)  # 8am-9pm patient local time
+
+# Document processing
+DOCUMENT_CONFIDENCE_THRESHOLD = 0.80
+
+# Risk tiers: (min_score, max_score)
+RISK_TIERS = {
+    "critical": (0.70, 1.0),
+    "high": (0.40, 0.69),
+    "medium": (0.20, 0.39),
+    "low": (0.0, 0.19),
+}
+
+# Workflow state machine
+WORKFLOW_STATES = [
+    "IDENTIFIED", "NOTIFIED", "ENGAGED", "DOC_COLLECTION",
+    "VALIDATION", "SUBMISSION_READY", "COMPLETED",
+    "NO_RESPONSE", "INVALID_DOC", "DROPPED_OFF", "EXPIRED",
+]
+
+# Workflow timeouts (days)
+WORKFLOW_TIMEOUTS = {
+    "NOTIFIED": 14,
+    "ENGAGED": 7,
+    "DOC_COLLECTION": 14,
+}
+
 
 def _find_npm_package(package_name: str) -> str | None:
     """Find the JS entry point of a locally-installed npm MCP server package.

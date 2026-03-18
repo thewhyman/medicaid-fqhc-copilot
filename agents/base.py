@@ -10,6 +10,7 @@ class AgentResult:
     success: bool
     data: dict = field(default_factory=dict)
     error: str | None = None
+    audit_log_entry: dict | None = None
 
 
 @dataclass

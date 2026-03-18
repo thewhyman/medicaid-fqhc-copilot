@@ -12,12 +12,17 @@ from collections.abc import AsyncGenerator
 
 from openai import OpenAI
 
+from agents.caseworker_copilot import CaseworkerCopilot
+from agents.document_agent import DocumentAgent
 from agents.eligibility_agent import EligibilityAgent
 from agents.eval_correctness import CorrectnessEval
 from agents.eval_efficiency import EfficiencyEval
 from agents.eval_quality import QualityEval
 from agents.knowledge_agent import KnowledgeAgent
 from agents.memory_agent import MemoryAgent
+from agents.outreach_agent import OutreachAgent
+from agents.risk_scoring_agent import RiskScoringAgent
+from agents.workflow_orchestrator import WorkflowOrchestrator
 from mcp_manager import MCPManager
 from prompts import SYSTEM_PROMPT
 
@@ -32,13 +37,20 @@ class Router:
         self._db_url: str | None = None
         self.last_query_metrics: dict = {}
 
-        # Initialize agents
+        # Initialize agents — Phase 1
         self.memory_agent = MemoryAgent()
         self.knowledge_agent = KnowledgeAgent()
         self.eligibility_agent = EligibilityAgent(self.client, self.mcp)
         self.correctness_eval = CorrectnessEval()
         self.efficiency_eval = EfficiencyEval()
         self.quality_eval = QualityEval(self.client)
+
+        # Phase 2 agents
+        self.risk_scoring_agent = RiskScoringAgent()
+        self.outreach_agent = OutreachAgent()
+        self.document_agent = DocumentAgent(self.client)
+        self.workflow_orchestrator = WorkflowOrchestrator()
+        self.caseworker_copilot = CaseworkerCopilot(self.client)
 
     # ------------------------------------------------------------------
     # Database / conversation persistence (same as MedicaidAgent)
@@ -230,8 +242,20 @@ class Router:
                 "response or follow-up question. Guardrail and QA require a fresh DB query."
             )
 
+        # api_calls counts every LLM API invocation:
+        #   - initial reasoning call (1)
+        #   - each tool result processing call (1 per ReAct iteration)
+        #   - QA review call (1)
+        # tool_call_count counts MCP tool invocations (subset of api_calls)
+        tool_call_count = len(tool_names)
+        react_calls = api_calls - 1  # subtract QA review
         metrics = {
-            "api_calls": api_calls,
+            "llm_api_calls": api_calls,
+            "llm_api_calls_breakdown": {
+                "react_loop": react_calls,
+                "qa_review": 1 if qa_data else 0,
+            },
+            "tool_call_count": tool_call_count,
             "tool_names": tool_names,
             "session_id": session_id,
             "latency_ms": elapsed_ms,
@@ -372,3 +396,34 @@ class Router:
 
         # 7. Persist conversation
         self.save_conversation(session_id, self._extract_patient_id(session_id))
+
+    # ------------------------------------------------------------------
+    # Phase 2: Renewal orchestration
+    # ------------------------------------------------------------------
+
+    def start_renewal(self, patient: dict, renewal: dict) -> dict:
+        """Initiate a renewal workflow: score risk, trigger first outreach."""
+        risk_result = self.risk_scoring_agent.score(patient, renewal)
+        transition = self.workflow_orchestrator.process_event(renewal, "risk_scored")
+        return {
+            "risk": risk_result.data,
+            "transition": transition.data if transition.success else {"error": transition.error},
+        }
+
+    def process_renewal_event(
+        self, renewal: dict, event: str, event_data: dict | None = None
+    ) -> dict:
+        """Process a renewal workflow event."""
+        result = self.workflow_orchestrator.process_event(renewal, event, event_data)
+        return result.data if result.success else {"error": result.error}
+
+    def process_document(self, document_text: str, patient: dict) -> dict:
+        """Process an uploaded document through the document agent."""
+        result = self.document_agent.process(document_text, patient)
+        return result.data
+
+    def get_dashboard(self, renewals: list[dict]) -> dict:
+        """Get caseworker dashboard data: portfolio summary + alerts."""
+        portfolio = self.caseworker_copilot.get_portfolio_summary(renewals)
+        alerts = self.caseworker_copilot.get_alerts(renewals)
+        return {"portfolio": portfolio.data, "alerts": alerts.data}

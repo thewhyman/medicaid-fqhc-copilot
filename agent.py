@@ -354,8 +354,15 @@ class MedicaidAgent:
                 "response or follow-up question. Guardrail and QA require a fresh DB query."
             )
 
+        tool_call_count = len(tool_names)
+        react_calls = api_calls - 1  # subtract QA review
         metrics = {
-            "api_calls": api_calls,
+            "llm_api_calls": api_calls,
+            "llm_api_calls_breakdown": {
+                "react_loop": react_calls,
+                "qa_review": 1 if qa_result else 0,
+            },
+            "tool_call_count": tool_call_count,
             "tool_names": tool_names,
             "session_id": session_id,
             "latency_ms": elapsed_ms,

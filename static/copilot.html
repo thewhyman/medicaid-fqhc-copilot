@@ -564,12 +564,13 @@ async function showMetrics() {
     }
 
     // Latency
+    const llmCalls = m.llm_api_calls || m.api_calls || 0;
     if (m.latency_ms) {
       const secs = (m.latency_ms / 1000).toFixed(1);
       let detail = '<div class="detail-title">Latency Breakdown</div>';
       detail += '<b>Total:</b> ' + m.latency_ms.toLocaleString() + 'ms (' + secs + 's)<br>';
       detail += '<b>Includes:</b><ul>';
-      detail += '<li>OpenAI API calls (' + m.api_calls + ' round-trips)</li>';
+      detail += '<li>OpenAI API calls (' + llmCalls + ' round-trips)</li>';
       if (m.tool_names && m.tool_names.length > 0) detail += '<li>MCP tool execution (' + m.tool_names.join(', ') + ')</li>';
       if (m.guardrail_match !== null) detail += '<li>Deterministic guardrail check</li>';
       if (m.qa_approved !== null) detail += '<li>QA agent review (1 API call)</li>';
@@ -581,22 +582,33 @@ async function showMetrics() {
     }
 
     // API calls
-    if (m.api_calls) {
+    if (llmCalls) {
       const tools = m.tool_names && m.tool_names.length > 0 ? m.tool_names : [];
+      const breakdown = m.llm_api_calls_breakdown;
       let detail = '<div class="detail-title">API Call Breakdown</div>';
-      detail += '<b>Total:</b> ' + m.api_calls + ' OpenAI API round-trips<br>';
-      detail += '<b>Breakdown:</b><ul>';
-      detail += '<li>1 initial call (send query + system prompt)</li>';
-      if (tools.length > 0) {
-        detail += '<li>' + tools.length + ' tool execution round' + (tools.length > 1 ? 's' : '') + ': ' + tools.join(', ') + '</li>';
+      detail += '<b>Total LLM API calls:</b> ' + llmCalls + '<br>';
+      if (breakdown) {
+        detail += '<b>Breakdown:</b><ul>';
+        detail += '<li>ReAct loop: ' + breakdown.react_loop + ' calls</li>';
+        if (breakdown.qa_review) detail += '<li>QA review: ' + breakdown.qa_review + ' call</li>';
+        detail += '</ul>';
+      } else {
+        detail += '<b>Breakdown:</b><ul>';
+        detail += '<li>1 initial call (send query + system prompt)</li>';
+        if (tools.length > 0) {
+          detail += '<li>' + tools.length + ' tool execution round' + (tools.length > 1 ? 's' : '') + ': ' + tools.join(', ') + '</li>';
+        }
+        detail += '<li>1 final response (after tool results)</li>';
+        if (m.qa_approved !== null) detail += '<li>1 QA agent review call</li>';
+        detail += '</ul>';
       }
-      detail += '<li>1 final response (after tool results)</li>';
-      if (m.qa_approved !== null) detail += '<li>1 QA agent review call</li>';
-      detail += '</ul>';
+      if (m.tool_call_count !== undefined) {
+        detail += '<b>MCP tool calls:</b> ' + m.tool_call_count;
+      }
       if (m.total_tokens) {
-        detail += '<b>Total tokens:</b> ' + m.total_tokens.toLocaleString();
+        detail += '<br><b>Total tokens:</b> ' + m.total_tokens.toLocaleString();
       }
-      bar.appendChild(makeBadge('', m.api_calls + ' API calls', detail));
+      bar.appendChild(makeBadge('', llmCalls + ' API calls', detail));
     }
 
     if (bar.children.length > 0) {

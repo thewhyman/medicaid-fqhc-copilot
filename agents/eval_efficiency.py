@@ -1,9 +1,7 @@
 """Efficiency Eval Agent: API call counting and banned tool detection."""
 
 from agents.base import EvalResult
-
-MAX_API_CALLS_EVAL = 4
-BANNED_TOOLS = ["fetch"]
+from config import BANNED_TOOLS, MAX_API_CALLS_EVAL
 
 
 class EfficiencyEval:

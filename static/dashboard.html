@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MediAssist AI — Caseworker Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f5f7fa; color: #1a1a2e; }
+
+  /* Header */
+  .header { background: #0f172a; color: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header nav { margin-left: auto; display: flex; gap: 16px; font-size: 13px; }
+  .header nav a { color: #94a3b8; text-decoration: none; padding: 4px 12px; border-radius: 6px; transition: all 0.2s; }
+  .header nav a:hover { color: #fff; background: rgba(255,255,255,0.1); }
+  .header nav a.active { color: #fff; background: #2563eb; }
+
+  /* Main layout */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Left: Pipeline + Alerts */
+  .left-panel { width: 360px; background: #fff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow-y: auto; }
+
+  /* Tabs */
+  .tab-bar { display: flex; border-bottom: 1px solid #e2e8f0; }
+  .tab-bar button { flex: 1; padding: 12px; font-size: 13px; font-weight: 600; background: none; border: none; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .tab-bar button.active { color: #2563eb; border-bottom-color: #2563eb; }
+  .tab-bar button:hover { color: #1a1a2e; }
+
+  .tab-content { display: none; flex: 1; overflow-y: auto; }
+  .tab-content.active { display: block; }
+
+  /* Pipeline columns */
+  .pipeline-stage { border-bottom: 1px solid #e2e8f0; }
+  .stage-header { padding: 10px 16px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+  .stage-header:hover { background: #f8fafc; }
+  .stage-count { background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+  .stage-patients { padding: 0 8px 8px; }
+  .stage-patients.collapsed { display: none; }
+
+  /* Patient row */
+  .patient-row { padding: 10px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; transition: background 0.15s; }
+  .patient-row:hover { background: #f0f4ff; }
+  .patient-row.selected { background: #e3edff; border-left: 3px solid #2563eb; }
+  .patient-row .name { font-weight: 600; font-size: 13px; flex: 1; }
+  .patient-row .meta { font-size: 11px; color: #64748b; }
+
+  /* Risk dot */
+  .risk-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .risk-dot.critical { background: #dc2626; }
+  .risk-dot.high { background: #f59e0b; }
+  .risk-dot.medium { background: #3b82f6; }
+  .risk-dot.low { background: #10b981; }
+  .risk-dot.none { background: #cbd5e1; }
+
+  /* Alert card */
+  .alert-card { margin: 8px 12px; padding: 12px; border-radius: 8px; border-left: 3px solid #e2e8f0; cursor: pointer; transition: background 0.15s; }
+  .alert-card:hover { background: #f8fafc; }
+  .alert-card.critical { border-left-color: #dc2626; background: #fef2f2; }
+  .alert-card.high { border-left-color: #f59e0b; background: #fffbeb; }
+  .alert-card.medium { border-left-color: #3b82f6; background: #eff6ff; }
+  .alert-card .alert-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .alert-card .alert-detail { font-size: 12px; color: #64748b; }
+
+  /* Right: Detail view */
+  .right-panel { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
+
+  /* Stats bar */
+  .stats-bar { display: flex; gap: 12px; padding: 16px 24px; border-bottom: 1px solid #e2e8f0; background: #fff; flex-wrap: wrap; }
+  .stat-box { flex: 1; min-width: 120px; padding: 12px 16px; border-radius: 8px; background: #f8fafc; text-align: center; }
+  .stat-box .value { font-size: 24px; font-weight: 700; }
+  .stat-box .label { font-size: 11px; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .stat-box.critical .value { color: #dc2626; }
+  .stat-box.high .value { color: #f59e0b; }
+  .stat-box.active .value { color: #2563eb; }
+  .stat-box.done .value { color: #10b981; }
+
+  /* Empty state */
+  .empty-detail { display: flex; align-items: center; justify-content: center; flex: 1; color: #94a3b8; font-size: 15px; text-align: center; line-height: 1.8; }
+
+  /* Patient detail panel */
+  .detail-panel { display: none; flex: 1; flex-direction: column; overflow-y: auto; }
+  .detail-panel.visible { display: flex; }
+
+  .detail-header { padding: 20px 24px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+  .detail-header h2 { font-size: 20px; margin-bottom: 4px; }
+  .detail-header .subtitle { font-size: 13px; color: #64748b; }
+
+  .detail-info { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; padding: 16px 24px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+  .info-item { }
+  .info-item .info-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }
+  .info-item .info-value { font-size: 14px; font-weight: 600; }
+
+  /* Status badge */
+  .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+  .status-badge.identified { background: #e2e8f0; color: #475569; }
+  .status-badge.notified { background: #dbeafe; color: #1d4ed8; }
+  .status-badge.engaged { background: #d1fae5; color: #065f46; }
+  .status-badge.doc_collection { background: #fef3c7; color: #92400e; }
+  .status-badge.validation { background: #e0e7ff; color: #3730a3; }
+  .status-badge.submission_ready { background: #cffafe; color: #155e75; }
+  .status-badge.completed { background: #d1fae5; color: #065f46; }
+  .status-badge.no_response { background: #fee2e2; color: #991b1b; }
+  .status-badge.invalid_doc { background: #fecaca; color: #991b1b; }
+  .status-badge.dropped_off { background: #fef3c7; color: #92400e; }
+  .status-badge.expired { background: #f3f4f6; color: #6b7280; }
+
+  /* Risk badge */
+  .risk-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+  .risk-badge.critical { background: #fee2e2; color: #991b1b; }
+  .risk-badge.high { background: #fef3c7; color: #92400e; }
+  .risk-badge.medium { background: #dbeafe; color: #1d4ed8; }
+  .risk-badge.low { background: #d1fae5; color: #065f46; }
+
+  /* Action section */
+  .actions-section { padding: 16px 24px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+  .actions-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #0f172a; }
+  .action-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  .action-btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid #e2e8f0; background: #fff; color: #1a1a2e; transition: all 0.2s; }
+  .action-btn:hover { background: #f0f4ff; border-color: #2563eb; color: #2563eb; }
+  .action-btn.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .action-btn.primary:hover { background: #1d4ed8; }
+  .action-btn.danger { color: #dc2626; border-color: #fecaca; }
+  .action-btn.danger:hover { background: #fef2f2; }
+  .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Timeline */
+  .timeline-section { padding: 16px 24px; flex: 1; }
+  .timeline-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #0f172a; }
+  .timeline { position: relative; padding-left: 24px; }
+  .timeline::before { content: ''; position: absolute; left: 7px; top: 4px; bottom: 4px; width: 2px; background: #e2e8f0; }
+  .timeline-item { position: relative; margin-bottom: 16px; }
+  .timeline-item::before { content: ''; position: absolute; left: -20px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: #2563eb; border: 2px solid #fff; box-shadow: 0 0 0 2px #2563eb; }
+  .timeline-item .tl-time { font-size: 11px; color: #94a3b8; margin-bottom: 2px; }
+  .timeline-item .tl-event { font-size: 13px; font-weight: 500; }
+  .timeline-item .tl-detail { font-size: 12px; color: #64748b; margin-top: 2px; }
+  .timeline-empty { font-size: 13px; color: #94a3b8; padding: 8px 0; }
+
+  /* Detail tabs */
+  .detail-tabs { display: flex; border-bottom: 1px solid #e2e8f0; background: #fff; }
+  .detail-tabs button { padding: 10px 20px; font-size: 13px; font-weight: 600; background: none; border: none; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .detail-tabs button.active { color: #2563eb; border-bottom-color: #2563eb; }
+  .detail-tabs button:hover { color: #1a1a2e; }
+  .detail-tab-content { display: none; flex: 1; flex-direction: column; overflow-y: auto; }
+  .detail-tab-content.active { display: flex; }
+
+  /* Eligibility chat embedded */
+  .chat-area { flex: 1; display: flex; flex-direction: column; background: #f0f2f5; }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .chat-messages .chat-empty { color: #94a3b8; text-align: center; margin-top: 20%; font-size: 14px; line-height: 1.6; }
+  .msg { max-width: 85%; padding: 12px 16px; border-radius: 14px; font-size: 13px; line-height: 1.7; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+  .msg.user { align-self: flex-end; background: #2563eb; color: #fff; border-bottom-right-radius: 4px; }
+  .msg.agent { align-self: flex-start; background: #fff; border-bottom-left-radius: 4px; }
+  .msg.agent h1, .msg.agent h2, .msg.agent h3 { font-size: 13px; font-weight: 700; margin: 8px 0 4px; color: #1a1a2e; }
+  .msg.agent strong { font-weight: 700; }
+  .msg.agent table { border-collapse: collapse; margin: 8px 0; font-size: 12px; width: 100%; }
+  .msg.agent th, .msg.agent td { border: 1px solid #e8e8e8; padding: 4px 8px; text-align: left; }
+  .msg.agent th { background: #f8f9fa; font-weight: 600; }
+  .msg.agent ul, .msg.agent ol { padding-left: 18px; margin: 4px 0; }
+  .msg.agent li { margin-bottom: 2px; }
+  .msg .cursor { display: inline-block; width: 2px; height: 13px; background: #2563eb; animation: blink 0.8s infinite; vertical-align: text-bottom; margin-left: 1px; }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  .chat-input-bar { padding: 12px 16px; border-top: 1px solid #e2e8f0; background: #fff; display: flex; gap: 8px; }
+  .chat-input-bar input { flex: 1; border: 1px solid #e2e8f0; border-radius: 20px; padding: 8px 16px; font-size: 13px; outline: none; background: #f5f7fa; }
+  .chat-input-bar input:focus { border-color: #2563eb; background: #fff; }
+  .chat-input-bar button { background: #2563eb; color: #fff; border: none; border-radius: 20px; padding: 8px 18px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .chat-input-bar button:hover { background: #1d4ed8; }
+  .chat-input-bar button:disabled { background: #c5d8f0; cursor: not-allowed; }
+  .chat-check-btn { background: #10b981; color: #fff; border: none; border-radius: 20px; padding: 8px 18px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .chat-check-btn:hover { background: #059669; }
+  .chat-check-btn:disabled { background: #a7f3d0; cursor: not-allowed; }
+
+  /* Override modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.active { display: flex; }
+  .modal { background: #fff; border-radius: 12px; padding: 24px; width: 440px; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+  .modal h3 { margin-bottom: 16px; font-size: 18px; }
+  .modal label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; margin-top: 12px; color: #64748b; }
+  .modal input, .modal select, .modal textarea { width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; font-size: 14px; font-family: inherit; }
+  .modal textarea { height: 80px; resize: vertical; }
+  .modal .actions { margin-top: 20px; display: flex; gap: 8px; justify-content: flex-end; }
+  .modal .btn-cancel { padding: 8px 20px; border-radius: 6px; font-size: 14px; cursor: pointer; background: #f5f5f5; border: 1px solid #ddd; color: #333; }
+  .modal .btn-save { padding: 8px 20px; border-radius: 6px; font-size: 14px; cursor: pointer; background: #2563eb; border: none; color: #fff; }
+  .modal .btn-save:hover { background: #1d4ed8; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #0f172a; color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 200; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .toast.success { background: #065f46; }
+  .toast.error { background: #991b1b; }
+  .toast.visible { display: block; }
+
+  /* Loading spinner */
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 768px) {
+    .main { flex-direction: column; }
+    .left-panel { width: 100%; max-height: 40vh; }
+    .detail-info { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+  <h1>MediAssist AI — Caseworker Dashboard</h1>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/dashboard" class="active">Dashboard</a>
+  </nav>
+</div>
+
+<div class="stats-bar" id="statsBar">
+  <div class="stat-box active"><div class="value" id="statTotal">-</div><div class="label">Total Renewals</div></div>
+  <div class="stat-box critical"><div class="value" id="statCritical">-</div><div class="label">Critical</div></div>
+  <div class="stat-box high"><div class="value" id="statHigh">-</div><div class="label">High Risk</div></div>
+  <div class="stat-box"><div class="value" id="statActive">-</div><div class="label">In Progress</div></div>
+  <div class="stat-box done"><div class="value" id="statCompleted">-</div><div class="label">Completed</div></div>
+</div>
+
+<div class="main">
+  <!-- Left panel: Pipeline & Alerts -->
+  <div class="left-panel">
+    <div class="tab-bar">
+      <button class="active" onclick="switchTab('pipeline')">Pipeline</button>
+      <button onclick="switchTab('alerts')">Alerts</button>
+    </div>
+    <div class="tab-content active" id="tab-pipeline"></div>
+    <div class="tab-content" id="tab-alerts"></div>
+  </div>
+
+  <!-- Right panel: Detail view -->
+  <div class="right-panel">
+    <div class="empty-detail" id="emptyDetail">
+      Select a patient from the pipeline to view their renewal details.
+    </div>
+    <div class="detail-panel" id="detailPanel">
+      <div class="detail-header">
+        <h2 id="detailName">-</h2>
+        <div class="subtitle" id="detailSubtitle">-</div>
+      </div>
+      <div class="detail-tabs">
+        <button onclick="switchDetailTab('eligibility')">Eligibility</button>
+        <button class="active" onclick="switchDetailTab('renewal')">Renewal</button>
+      </div>
+      <!-- Eligibility tab -->
+      <div class="detail-tab-content" id="dtab-eligibility">
+        <div class="chat-area">
+          <div class="chat-messages" id="eligChat">
+            <div class="chat-empty">Click <strong>Check Eligibility</strong> to run an eligibility determination for this patient, or type a question below.</div>
+          </div>
+          <div class="chat-input-bar">
+            <button class="chat-check-btn" id="eligCheckBtn" onclick="checkEligibility()">Check Eligibility</button>
+            <input type="text" id="eligInput" placeholder="Ask a follow-up question..." onkeydown="if(event.key==='Enter')sendEligMessage()" disabled>
+            <button id="eligSendBtn" onclick="sendEligMessage()" disabled>Send</button>
+          </div>
+        </div>
+      </div>
+      <!-- Renewal tab -->
+      <div class="detail-tab-content active" id="dtab-renewal">
+        <div class="detail-info" id="detailInfo"></div>
+        <div class="actions-section" id="actionsSection">
+          <h3>Available Actions</h3>
+          <div class="action-buttons" id="actionButtons"></div>
+        </div>
+        <div class="timeline-section">
+          <h3>Timeline</h3>
+          <div class="timeline" id="timeline"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Override Modal -->
+<div class="modal-overlay" id="overrideModal">
+  <div class="modal">
+    <h3>Caseworker Override</h3>
+    <label>Your Name</label>
+    <input id="overrideCaseworker" placeholder="e.g. Sarah Johnson">
+    <label>Override to State</label>
+    <select id="overrideState">
+      <option value="">Keep current state</option>
+      <option value="NOTIFIED">NOTIFIED</option>
+      <option value="ENGAGED">ENGAGED</option>
+      <option value="DOC_COLLECTION">DOC_COLLECTION</option>
+      <option value="VALIDATION">VALIDATION</option>
+      <option value="SUBMISSION_READY">SUBMISSION_READY</option>
+      <option value="COMPLETED">COMPLETED</option>
+    </select>
+    <label>Reason</label>
+    <textarea id="overrideReason" placeholder="Explain the reason for this override..."></textarea>
+    <div class="actions">
+      <button class="btn-cancel" onclick="closeOverride()">Cancel</button>
+      <button class="btn-save" onclick="submitOverride()">Submit Override</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// State
+let pipelineData = {};
+let alertsData = [];
+let selectedRenewal = null;
+let allRenewals = [];
+let eligSessionId = null;
+let isEligStreaming = false;
+// Per-patient chat history cache
+const eligChatHistory = {};
+
+// Workflow state ordering for display
+const STATE_ORDER = [
+  'IDENTIFIED', 'NOTIFIED', 'ENGAGED', 'DOC_COLLECTION',
+  'VALIDATION', 'SUBMISSION_READY',
+  'NO_RESPONSE', 'INVALID_DOC', 'DROPPED_OFF',
+  'COMPLETED', 'EXPIRED'
+];
+
+const STATE_LABELS = {
+  'IDENTIFIED': 'Identified',
+  'NOTIFIED': 'Notified',
+  'ENGAGED': 'Engaged',
+  'DOC_COLLECTION': 'Document Collection',
+  'VALIDATION': 'Validation',
+  'SUBMISSION_READY': 'Submission Ready',
+  'COMPLETED': 'Completed',
+  'EXPIRED': 'Expired',
+  'NO_RESPONSE': 'No Response',
+  'INVALID_DOC': 'Invalid Document',
+  'DROPPED_OFF': 'Dropped Off'
+};
+
+// Valid events per state for action buttons
+const STATE_EVENTS = {
+  'IDENTIFIED': [
+    { event: 'risk_scored', label: 'Score Risk & Notify', primary: true },
+    { event: 'manual_add', label: 'Manual Add' }
+  ],
+  'NOTIFIED': [
+    { event: 'patient_responded', label: 'Patient Responded', primary: true },
+    { event: 'timeout', label: 'Mark No Response', danger: true }
+  ],
+  'ENGAGED': [
+    { event: 'requirements_acknowledged', label: 'Requirements Acknowledged', primary: true }
+  ],
+  'DOC_COLLECTION': [
+    { event: 'all_docs_received', label: 'All Docs Received', primary: true }
+  ],
+  'VALIDATION': [
+    { event: 'all_docs_valid', label: 'All Docs Valid', primary: true },
+    { event: 'doc_invalid', label: 'Document Invalid', danger: true }
+  ],
+  'SUBMISSION_READY': [
+    { event: 'submitted_to_state', label: 'Submit to State', primary: true }
+  ],
+  'NO_RESPONSE': [
+    { event: 'patient_responded', label: 'Patient Responded', primary: true },
+    { event: 'escalation_sent', label: 'Send Escalation' },
+    { event: 'deadline_passed', label: 'Mark Expired', danger: true }
+  ],
+  'INVALID_DOC': [
+    { event: 'resubmission_requested', label: 'Request Resubmission', primary: true },
+    { event: 'caseworker_override', label: 'Override to Submission Ready' }
+  ],
+  'DROPPED_OFF': [
+    { event: 'patient_re_engaged', label: 'Re-engaged', primary: true },
+    { event: 'deadline_passed', label: 'Mark Expired', danger: true }
+  ]
+};
+
+// --- Init ---
+loadPipeline();
+loadAlerts();
+
+// --- Data fetching ---
+async function loadPipeline() {
+  try {
+    const r = await fetch('/renewals/pipeline');
+    const data = await r.json();
+    pipelineData = data.pipeline || {};
+    allRenewals = [];
+    for (const patients of Object.values(pipelineData)) {
+      allRenewals.push(...patients);
+    }
+    renderPipeline();
+    updateStats();
+  } catch (e) {
+    console.error('Failed to load pipeline:', e);
+  }
+}
+
+async function loadAlerts() {
+  try {
+    const r = await fetch('/dashboard/alerts');
+    const data = await r.json();
+    alertsData = data.alerts || [];
+    renderAlerts();
+  } catch (e) {
+    console.error('Failed to load alerts:', e);
+  }
+}
+
+// --- Stats ---
+function updateStats() {
+  const total = allRenewals.length;
+  const critical = allRenewals.filter(r => r.risk_tier === 'critical').length;
+  const high = allRenewals.filter(r => r.risk_tier === 'high').length;
+  const completed = (pipelineData['COMPLETED'] || []).length + (pipelineData['EXPIRED'] || []).length;
+  const active = total - completed;
+
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statCritical').textContent = critical;
+  document.getElementById('statHigh').textContent = high;
+  document.getElementById('statActive').textContent = active;
+  document.getElementById('statCompleted').textContent = completed;
+}
+
+// --- Render pipeline ---
+function renderPipeline() {
+  const container = document.getElementById('tab-pipeline');
+  container.innerHTML = '';
+
+  STATE_ORDER.forEach(state => {
+    const patients = pipelineData[state] || [];
+    if (patients.length === 0 && ['NO_RESPONSE', 'INVALID_DOC', 'DROPPED_OFF', 'EXPIRED'].includes(state)) return;
+
+    const stage = document.createElement('div');
+    stage.className = 'pipeline-stage';
+
+    const header = document.createElement('div');
+    header.className = 'stage-header';
+    header.innerHTML = `${STATE_LABELS[state] || state} <span class="stage-count">${patients.length}</span>`;
+    header.onclick = () => {
+      const list = stage.querySelector('.stage-patients');
+      list.classList.toggle('collapsed');
+    };
+
+    const list = document.createElement('div');
+    list.className = 'stage-patients';
+
+    patients.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'patient-row' + (selectedRenewal && selectedRenewal.id === p.id ? ' selected' : '');
+      const tier = p.risk_tier || 'none';
+      row.innerHTML = `
+        <div class="risk-dot ${tier}"></div>
+        <div class="name">${p.first_name} ${p.last_name}</div>
+        <div class="meta">${p.state || ''} &middot; ${daysUntil(p.renewal_due_date)}d</div>
+      `;
+      row.onclick = () => selectRenewal(p);
+      list.appendChild(row);
+    });
+
+    stage.appendChild(header);
+    stage.appendChild(list);
+    container.appendChild(stage);
+  });
+}
+
+// --- Render alerts ---
+function renderAlerts() {
+  const container = document.getElementById('tab-alerts');
+  container.innerHTML = '';
+
+  if (alertsData.length === 0) {
+    container.innerHTML = '<div style="padding: 24px; text-align: center; color: #94a3b8;">No active alerts</div>';
+    return;
+  }
+
+  alertsData.forEach(alert => {
+    const card = document.createElement('div');
+    const severity = alert.priority || alert.severity || 'medium';
+    card.className = 'alert-card ' + severity;
+    const title = (alert.type || alert.alert_type || 'Alert').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const name = alert.patient_name || ((alert.first_name || '') + ' ' + (alert.last_name || '')).trim();
+    const detail = alert.details || alert.message || '';
+    card.innerHTML = `
+      <div class="alert-title">${title}</div>
+      <div class="alert-detail">${name} &mdash; ${detail}</div>
+    `;
+    card.onclick = () => {
+      const renewal = allRenewals.find(r => r.patient_id === alert.patient_id);
+      if (renewal) selectRenewal(renewal);
+    };
+    container.appendChild(card);
+  });
+}
+
+// --- Select renewal for detail ---
+async function selectRenewal(renewal) {
+  selectedRenewal = renewal;
+  document.getElementById('emptyDetail').style.display = 'none';
+  document.getElementById('detailPanel').classList.add('visible');
+
+  // Header
+  document.getElementById('detailName').textContent = `${renewal.first_name} ${renewal.last_name}`;
+  const state = renewal.current_step || 'IDENTIFIED';
+  const stateClass = state.toLowerCase();
+  document.getElementById('detailSubtitle').innerHTML = `
+    <span class="status-badge ${stateClass}">${STATE_LABELS[state] || state}</span>
+    ${renewal.risk_tier ? `<span class="risk-badge ${renewal.risk_tier}" style="margin-left: 8px;">${renewal.risk_tier} risk</span>` : ''}
+    &nbsp;&middot;&nbsp; Patient ID: ${renewal.patient_id}
+  `;
+
+  // Info grid
+  const dueDate = renewal.renewal_due_date || 'N/A';
+  const days = daysUntil(dueDate);
+  const score = renewal.risk_score !== null && renewal.risk_score !== undefined ? (parseFloat(renewal.risk_score) * 100).toFixed(0) + '%' : 'Not scored';
+  const lang = renewal.preferred_language === 'es' ? 'Spanish' : 'English';
+  const consent = renewal.consent_status || 'pending';
+
+  document.getElementById('detailInfo').innerHTML = `
+    <div class="info-item"><div class="info-label">Due Date</div><div class="info-value">${formatDate(dueDate)}</div></div>
+    <div class="info-item"><div class="info-label">Days Remaining</div><div class="info-value" style="color: ${days <= 7 ? '#dc2626' : days <= 14 ? '#f59e0b' : '#10b981'}">${days} days</div></div>
+    <div class="info-item"><div class="info-label">Risk Score</div><div class="info-value">${score}</div></div>
+    <div class="info-item"><div class="info-label">Language</div><div class="info-value">${lang}</div></div>
+    <div class="info-item"><div class="info-label">Consent</div><div class="info-value">${consent}</div></div>
+    <div class="info-item"><div class="info-label">Age / State</div><div class="info-value">${renewal.age || '-'} / ${renewal.state || '-'}</div></div>
+  `;
+
+  // Actions
+  renderActions(state, renewal);
+
+  // Timeline
+  await loadTimeline(renewal.patient_id);
+
+  // Initialize eligibility chat for this patient
+  initEligChat();
+
+  // Re-render pipeline to update selection
+  renderPipeline();
+}
+
+function renderActions(state, renewal) {
+  const container = document.getElementById('actionButtons');
+  container.innerHTML = '';
+
+  const events = STATE_EVENTS[state] || [];
+  const isTerminal = state === 'COMPLETED' || state === 'EXPIRED';
+
+  if (state === 'IDENTIFIED') {
+    // Start renewal button
+    const btn = document.createElement('button');
+    btn.className = 'action-btn primary';
+    btn.textContent = 'Start Renewal';
+    btn.onclick = () => startRenewal(renewal.patient_id);
+    container.appendChild(btn);
+  }
+
+  events.forEach(ev => {
+    const btn = document.createElement('button');
+    btn.className = 'action-btn' + (ev.primary ? ' primary' : '') + (ev.danger ? ' danger' : '');
+    btn.textContent = ev.label;
+    btn.onclick = () => triggerEvent(renewal.patient_id, ev.event);
+    container.appendChild(btn);
+  });
+
+  if (!isTerminal) {
+    const overrideBtn = document.createElement('button');
+    overrideBtn.className = 'action-btn';
+    overrideBtn.textContent = 'Override';
+    overrideBtn.onclick = () => openOverride();
+    container.appendChild(overrideBtn);
+  }
+
+  if (isTerminal) {
+    container.innerHTML = '<span style="color: #94a3b8; font-size: 13px;">This renewal is ' + state.toLowerCase() + '. No further actions available.</span>';
+  }
+}
+
+// --- Timeline ---
+async function loadTimeline(patientId) {
+  const container = document.getElementById('timeline');
+  container.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    const r = await fetch(`/renewals/${patientId}/status`);
+    const data = await r.json();
+    const events = data.timeline || [];
+
+    if (events.length === 0) {
+      container.innerHTML = '<div class="timeline-empty">No events recorded yet. Start the renewal to begin tracking.</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    events.reverse().forEach(ev => {
+      const item = document.createElement('div');
+      item.className = 'timeline-item';
+      const details = ev.details || {};
+      const action = ev.action || '';
+      let description = action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      if (details.from && details.to) {
+        description = `${details.from} → ${details.to}`;
+        if (details.event) description += ` (${details.event.replace(/_/g, ' ')})`;
+      }
+      item.innerHTML = `
+        <div class="tl-time">${formatDateTime(ev.timestamp)}</div>
+        <div class="tl-event">${description}</div>
+        <div class="tl-detail">${ev.actor || ''}</div>
+      `;
+      container.appendChild(item);
+    });
+  } catch (e) {
+    container.innerHTML = '<div class="timeline-empty">Failed to load timeline.</div>';
+  }
+}
+
+// --- Actions ---
+async function startRenewal(patientId) {
+  try {
+    const r = await fetch(`/renewals/${patientId}/start`, { method: 'POST' });
+    if (!r.ok) {
+      const err = await r.json();
+      showToast(err.detail || 'Failed to start renewal', 'error');
+      return;
+    }
+    const data = await r.json();
+    showToast(`Renewal started. Risk: ${data.risk?.tier || 'scored'}`, 'success');
+    await refreshAll();
+  } catch (e) {
+    showToast('Failed to start renewal', 'error');
+  }
+}
+
+async function triggerEvent(patientId, event) {
+  try {
+    const r = await fetch(`/renewals/${patientId}/event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event }),
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      showToast(err.detail || 'Event failed', 'error');
+      return;
+    }
+    const data = await r.json();
+    showToast(`Transitioned to ${data.new_state}`, 'success');
+    await refreshAll();
+  } catch (e) {
+    showToast('Failed to process event', 'error');
+  }
+}
+
+async function refreshAll() {
+  await loadPipeline();
+  await loadAlerts();
+  if (selectedRenewal) {
+    const updated = allRenewals.find(r => r.id === selectedRenewal.id);
+    if (updated) {
+      await selectRenewal(updated);
+    }
+  }
+}
+
+// --- Override ---
+function openOverride() {
+  document.getElementById('overrideModal').classList.add('active');
+}
+
+function closeOverride() {
+  document.getElementById('overrideModal').classList.remove('active');
+}
+
+async function submitOverride() {
+  if (!selectedRenewal) return;
+  const caseworker = document.getElementById('overrideCaseworker').value.trim();
+  const reason = document.getElementById('overrideReason').value.trim();
+  const newState = document.getElementById('overrideState').value;
+
+  if (!caseworker || !reason) {
+    showToast('Name and reason are required', 'error');
+    return;
+  }
+
+  try {
+    const body = { caseworker, reason };
+    if (newState) body.new_state = newState;
+
+    const r = await fetch(`/dashboard/override/${selectedRenewal.id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      showToast(err.detail || 'Override failed', 'error');
+      return;
+    }
+    showToast('Override recorded', 'success');
+    closeOverride();
+    document.getElementById('overrideCaseworker').value = '';
+    document.getElementById('overrideReason').value = '';
+    document.getElementById('overrideState').value = '';
+    await refreshAll();
+  } catch (e) {
+    showToast('Failed to submit override', 'error');
+  }
+}
+
+// --- Tab switching ---
+function switchTab(tabName) {
+  document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tab-' + tabName).classList.add('active');
+}
+
+// --- Helpers ---
+function daysUntil(dateStr) {
+  if (!dateStr) return '-';
+  const due = new Date(dateStr);
+  const now = new Date();
+  return Math.ceil((due - now) / (1000 * 60 * 60 * 24));
+}
+
+function formatDate(dateStr) {
+  if (!dateStr || dateStr === 'N/A') return 'N/A';
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDateTime(dtStr) {
+  if (!dtStr) return '';
+  return new Date(dtStr).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function showToast(message, type) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = 'toast visible ' + (type || '');
+  setTimeout(() => { toast.classList.remove('visible'); }, 3000);
+}
+
+// --- Detail tab switching ---
+function switchDetailTab(tabName) {
+  document.querySelectorAll('.detail-tabs button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.detail-tab-content').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('dtab-' + tabName).classList.add('active');
+}
+
+// --- Markdown renderer (from copilot) ---
+function renderMd(text) {
+  let s = text;
+  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  s = s.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  s = s.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  s = s.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  s = s.replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/gs, '<em>$1</em>');
+  s = s.replace(/`(.+?)`/gs, '<code>$1</code>');
+  s = s.replace(/^---+$/gm, '<hr>');
+  s = s.replace(/((?:^\|.+\|$\n?)+)/gm, function(table) {
+    const rows = table.trim().split('\n').filter(r => !r.match(/^\|[\s\-:|]+\|$/));
+    if (rows.length === 0) return table;
+    let t = '<table>';
+    rows.forEach((row, i) => {
+      const cells = row.split('|').filter(c => c.trim() !== '');
+      const tag = i === 0 ? 'th' : 'td';
+      t += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+    });
+    return t + '</table>';
+  });
+  s = s.replace(/^[ ]*- (.+)$/gm, '<li>$1</li>');
+  s = s.replace(/^[ ]*\d+\. (.+)$/gm, '<li>$1</li>');
+  s = s.replace(/((?:<li>.+?<\/li>\s*)+)/gs, '<ul>$1</ul>');
+  s = s.replace(/\n\n+/g, '<br><br>');
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
+// --- Eligibility chat ---
+function initEligChat() {
+  if (!selectedRenewal) return;
+  const pid = selectedRenewal.patient_id;
+
+  // Restore previous chat for this patient
+  if (eligChatHistory[pid]) {
+    document.getElementById('eligChat').innerHTML = eligChatHistory[pid].html;
+    eligSessionId = eligChatHistory[pid].sessionId;
+  } else {
+    eligSessionId = 'dash-elig-' + pid + '-' + Date.now();
+    document.getElementById('eligChat').innerHTML = '<div class="chat-empty">Click <strong>Check Eligibility</strong> to run an eligibility determination for this patient, or type a question below.</div>';
+  }
+  document.getElementById('eligInput').disabled = false;
+  document.getElementById('eligSendBtn').disabled = false;
+  document.getElementById('eligCheckBtn').disabled = false;
+}
+
+function addEligMsg(role, content) {
+  const area = document.getElementById('eligChat');
+  // Remove empty state
+  const empty = area.querySelector('.chat-empty');
+  if (empty) empty.remove();
+
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  if (role === 'agent') {
+    div.innerHTML = renderMd(content);
+  } else {
+    div.textContent = content;
+  }
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+  return div;
+}
+
+function createEligBubble() {
+  const area = document.getElementById('eligChat');
+  const empty = area.querySelector('.chat-empty');
+  if (empty) empty.remove();
+
+  const div = document.createElement('div');
+  div.className = 'msg agent';
+  div.innerHTML = '<span class="cursor"></span>';
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+  return div;
+}
+
+function setEligInputState(enabled) {
+  document.getElementById('eligInput').disabled = !enabled;
+  document.getElementById('eligSendBtn').disabled = !enabled;
+  document.getElementById('eligCheckBtn').disabled = !enabled;
+}
+
+async function streamEligResponse(displayText, query) {
+  if (isEligStreaming || !selectedRenewal) return;
+  isEligStreaming = true;
+  setEligInputState(false);
+  addEligMsg('user', displayText);
+
+  const bubble = createEligBubble();
+  let fullText = '';
+
+  try {
+    const r = await fetch('/check/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, session_id: eligSessionId }),
+    });
+
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      fullText += decoder.decode(value, { stream: true });
+      bubble.innerHTML = renderMd(fullText) + '<span class="cursor"></span>';
+      document.getElementById('eligChat').scrollTop = document.getElementById('eligChat').scrollHeight;
+    }
+  } catch (e) {
+    fullText += '\n\n[Error: connection lost]';
+  }
+
+  bubble.innerHTML = renderMd(fullText);
+  isEligStreaming = false;
+  setEligInputState(true);
+
+  // Save chat history
+  if (selectedRenewal) {
+    eligChatHistory[selectedRenewal.patient_id] = {
+      html: document.getElementById('eligChat').innerHTML,
+      sessionId: eligSessionId,
+    };
+  }
+}
+
+function checkEligibility() {
+  if (!selectedRenewal) return;
+  const msg = `Check Medicaid eligibility for patient ID ${selectedRenewal.patient_id}`;
+  streamEligResponse(msg, msg);
+}
+
+function sendEligMessage() {
+  const input = document.getElementById('eligInput');
+  const text = input.value.trim();
+  if (!text || isEligStreaming || !selectedRenewal) return;
+  input.value = '';
+  const query = `[Context: Currently viewing patient ${selectedRenewal.first_name} ${selectedRenewal.last_name}, ID ${selectedRenewal.patient_id}]\n\n${text}`;
+  streamEligResponse(text, query);
+}
+</script>
+</body>
+</html>

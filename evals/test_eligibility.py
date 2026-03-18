@@ -225,7 +225,7 @@ def check_response_quality(pid: int, response: str) -> list[str]:
 def check_tool_efficiency(metrics: dict) -> list[str]:
     """Check API call count and banned tools. Returns list of issues."""
     issues = []
-    api_calls = metrics.get("api_calls", 0)
+    api_calls = metrics.get("llm_api_calls", metrics.get("api_calls", 0))
     tool_names = metrics.get("tool_names", [])
 
     if api_calls > MAX_API_CALLS:
@@ -320,9 +320,10 @@ async def run_agent_evals(base_url: str = "http://localhost:8000"):
                     quality_pass += 1
                     q_icon = "✓"
 
-                api_calls = metrics.get("api_calls", "?")
+                llm_calls = metrics.get("llm_api_calls", metrics.get("api_calls", "?"))
+                tool_count = metrics.get("tool_call_count", len(metrics.get("tool_names", [])))
                 tools = ", ".join(metrics.get("tool_names", []))
-                print(f"  [{c_icon}{e_icon}{q_icon}] #{pid} {name} | calls={api_calls} tools=[{tools}]")
+                print(f"  [{c_icon}{e_icon}{q_icon}] #{pid} {name} | llm_calls={llm_calls} tool_calls={tool_count} tools=[{tools}]")
                 if patient_issues:
                     for issue in patient_issues:
                         print(f"       ↳ {issue}")
